@@ -161,10 +161,13 @@ class VBench(object):
                             print0(f'WARNING!!! This required video is not found! Missing benchmark videos can lead to unfair evaluation result. The missing video is: {intended_video_name}')
                     cur_full_info_list.append(prompt_dict)
 
-        
         cur_full_info_path = os.path.join(self.output_path, name+'_full_info.json')
-        save_json(cur_full_info_list, cur_full_info_path)
+
+        if get_rank() == 0:
+            save_json(cur_full_info_list, cur_full_info_path)
         print0(f'Evaluation meta data saved to {cur_full_info_path}')
+        
+        barrier()
         return cur_full_info_path
 
 
