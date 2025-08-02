@@ -5,7 +5,7 @@ import importlib
 from itertools import chain
 from pathlib import Path
 
-from .distributed import get_rank, print0  
+from .distributed import get_rank, print0, barrier
 
 
 class VBench(object):
@@ -170,6 +170,7 @@ class VBench(object):
 
     def evaluate(self, videos_path, name, prompt_list=[], dimension_list=None, local=False, read_frame=False, mode='vbench_standard', **kwargs):
         results_dict = {}
+        metric_dict = {}
         if dimension_list is None:
             dimension_list = self.build_full_dimension_list()
         submodules_dict = init_submodules(dimension_list, local=local, read_frame=read_frame)
@@ -186,7 +187,13 @@ class VBench(object):
             print0(f'cur_full_info_path: {cur_full_info_path}') # TODO: to delete
             results = evaluate_func(cur_full_info_path, self.device, submodules_list, **kwargs)
             results_dict[dimension] = results
+
+            all_results, video_results = results
+            metric_dict[dimension] = all_results
+
         output_name = os.path.join(self.output_path, name+'_eval_results.json')
         if get_rank() == 0:
             save_json(results_dict, output_name)
             print0(f'Evaluation results saved to {output_name}')
+
+        return metric_dict
