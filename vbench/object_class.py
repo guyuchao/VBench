@@ -65,7 +65,11 @@ def object_class(model, video_dict, device):
                 'video_results': cur_success_frame_rate,
                 'success_frame_count': cur_success_frame_count,
                 'frame_count': len(cur_video_pred)})
-    success_rate = success_frame_count / frame_count
+
+    if frame_count == 0:
+        success_rate = 0
+    else:
+        success_rate = success_frame_count / frame_count
     return success_rate, video_results
         
 
