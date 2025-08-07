@@ -86,7 +86,10 @@ def color(model, video_dict, device):
                     'video_path': video_path, 
                     'video_results': cur_success_frame_rate,
                     'cur_success_frame_rate': cur_success_frame_rate,})
-    success_rate = success_frame_count_all / video_count
+    if video_count == 0:
+        success_rate = 0
+    else:
+        success_rate = success_frame_count_all / video_count
     return success_rate, video_results
         
 
