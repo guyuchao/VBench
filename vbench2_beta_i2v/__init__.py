@@ -38,7 +38,6 @@ class VBenchI2V(VBench):
             results_dict[dimension] = results
             metric_dict[dimension] = results[0]
         output_name = os.path.join(self.output_path, name+'_eval_results.json')
-        if get_rank() == 0:
-            save_json(results_dict, output_name)
-            print(f'Evaluation results saved to {output_name}')
+        save_json(results_dict, output_name)
+        print(f'Evaluation results saved to {output_name}')
         return metric_dict
