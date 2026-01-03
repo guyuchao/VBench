@@ -208,9 +208,8 @@ def compute_camera_motion(json_dir, device, submodules_list, **kwargs):
     all_results, diff_type_results, video_results = camera_motion(camera, video_list)
     if get_world_size() > 1:
         video_results = gather_list_of_dict(video_results)
-        diff_type_results = gather_list_of_dict(diff_type_results)
         all_results = sum([d['video_results'] for d in video_results]) / len(video_results)
-    return all_results, diff_type_results, video_results
+    return all_results, video_results
 
 
 
