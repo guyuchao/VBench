@@ -16,6 +16,7 @@ class VBenchI2V(VBench):
 
     def evaluate(self, videos_path, name, dimension_list=None, custom_image_folder=None, mode='vbench_standard', local=False, read_frame=False, resolution="1-1", **kwargs):
         results_dict = {}
+        metric_dict = {}
         if dimension_list is None:
             dimension_list = self.build_full_dimension_list()
         submodules_dict = init_submodules(dimension_list, local=local, read_frame=read_frame, resolution=resolution)
@@ -35,6 +36,9 @@ class VBenchI2V(VBench):
             print(f'cur_full_info_path: {cur_full_info_path}') # TODO: to delete
             results = evaluate_func(cur_full_info_path, self.device, submodules_list, **kwargs)
             results_dict[dimension] = results
+            metric_dict[dimension] = results[0]
         output_name = os.path.join(self.output_path, name+'_eval_results.json')
-        save_json(results_dict, output_name)
-        print(f'Evaluation results saved to {output_name}')
+        if get_rank() == 0:
+            save_json(results_dict, output_name)
+            print(f'Evaluation results saved to {output_name}')
+        return metric_dict

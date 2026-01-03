@@ -10,6 +10,16 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.transforms as transforms
+import torch.distributed
+
+from .distributed import (
+    get_world_size,
+    get_rank,
+    all_gather,
+    barrier,
+    distribute_list_to_rank,
+    gather_list_of_dict,
+)
 
 from vbench2_beta_i2v.utils import load_video, load_i2v_dimension_info, dino_transform_internet, dino_transform_Image_internet
 import logging
@@ -69,5 +79,9 @@ def compute_i2v_subject(json_dir, device, submodules_list, **kwargs):
     resolution = submodules_list['resolution']
     logger.info("Initialize DINO success")
     video_pair_list, _ = load_i2v_dimension_info(json_dir, dimension='i2v_subject', lang='en', resolution=resolution)
+    video_pair_list = distribute_list_to_rank(video_pair_list)
     all_results, video_results = i2v_subject(dino_model, video_pair_list, device)
+    if get_world_size() > 1:
+        video_results = gather_list_of_dict(video_results)
+        all_results = sum([d['video_results'] for d in video_results]) / len(video_results)
     return all_results, video_results

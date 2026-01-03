@@ -3,9 +3,13 @@ import os
 import numpy as np
 from tqdm import tqdm
 from math import ceil
-from vbench2_beta_i2v.third_party.cotracker.utils.visualizer import Visualizer
+# from vbench2_beta_i2v.third_party.cotracker.utils.visualizer import Visualizer
 from vbench2_beta_i2v.utils import load_video, load_dimension_info
-
+from .distributed import (
+    get_world_size,
+    distribute_list_to_rank,
+    gather_list_of_dict,
+)
 
 def transform(vector):
     x = np.mean([item[0] for item in vector])
@@ -200,7 +204,12 @@ def camera_motion(camera, video_list):
 def compute_camera_motion(json_dir, device, submodules_list, **kwargs):
     camera = CameraPredict(device, submodules_list)
     video_list, _ = load_dimension_info(json_dir, dimension='camera_motion', lang='en')
+    video_list = distribute_list_to_rank(video_list)
     all_results, diff_type_results, video_results = camera_motion(camera, video_list)
+    if get_world_size() > 1:
+        video_results = gather_list_of_dict(video_results)
+        diff_type_results = gather_list_of_dict(diff_type_results)
+        all_results = sum([d['video_results'] for d in video_results]) / len(video_results)
     return all_results, diff_type_results, video_results
 
 
