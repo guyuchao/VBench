@@ -275,7 +275,7 @@ def load_i2v_dimension_info(json_dir, dimension, lang, resolution):
     video_pair_list = []
     prompt_dict_ls = []
     full_prompt_list = load_json(json_dir)
-    image_root = f'vbench2_beta_i2v/data/crop/{resolution}'
+    image_root = f'datasets/vbench_i2v/crop/{resolution}'
     for prompt_dict in full_prompt_list:
         if dimension in prompt_dict['dimension'] and 'video_list' in prompt_dict:
             prompt = prompt_dict[f'prompt_{lang}']
