@@ -19,7 +19,7 @@ fvcore
 easydict
 decord==0.6.0
 pyiqa==0.1.8
-transformers==4.33.2
+transformers
 pycocoevalcap
 wheel
 cython
