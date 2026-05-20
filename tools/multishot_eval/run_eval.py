@@ -16,9 +16,23 @@ from sca import evaluate_sca
 from vbench_runner import VBenchMetricRunner
 
 
-DEFAULT_INTRA_QUALITY_DIMS = [
+DEFAULT_METRICS = [
+    "overall_quality",
+    "shot_structure",
+    "intra_shot_quality",
+]
+METRIC_CHOICES = [
+    "overall_quality",
+    "shot_structure",
+    "intra_shot_quality",
+    "inter_shot_quality",
+]
+
+DEFAULT_OVERALL_QUALITY_DIMS = [
     "aesthetic_quality",
     "dynamic_degree",
+]
+DEFAULT_INTRA_SHOT_QUALITY_DIMS = [
     "subject_consistency",
     "background_consistency",
 ]
@@ -32,20 +46,27 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--metrics",
         nargs="+",
-        default=["text_alignment", "sca", "intra_quality"],
-        choices=["text_alignment", "sca", "intra_quality", "inter_shot_quality"],
+        default=DEFAULT_METRICS,
+        choices=METRIC_CHOICES,
+        help="Output sections to evaluate.",
     )
     parser.add_argument(
-        "--text_metric",
+        "--text_alignment_metric",
         default="overall_consistency",
         choices=["overall_consistency", "clip_score"],
-        help="Metric used for per-shot text alignment.",
+        help="VBench metric used to score each shot against its caption (text_alignment sub-output of overall_quality).",
     )
     parser.add_argument(
-        "--intra_quality_dimensions",
+        "--overall_quality_dimensions",
         nargs="+",
-        default=DEFAULT_INTRA_QUALITY_DIMS,
-        help="VBench dimensions for intra-shot quality.",
+        default=DEFAULT_OVERALL_QUALITY_DIMS,
+        help="VBench dimensions evaluated per shot for overall_quality (in addition to text_alignment).",
+    )
+    parser.add_argument(
+        "--intra_shot_quality_dimensions",
+        nargs="+",
+        default=DEFAULT_INTRA_SHOT_QUALITY_DIMS,
+        help="VBench dimensions evaluated per shot for intra_shot_quality output.",
     )
     parser.add_argument("--device", default="cuda", help="Torch device for VBench metrics.")
     parser.add_argument("--load_ckpt_from_local", action="store_true", help="Use local VBench checkpoint paths.")
@@ -71,7 +92,7 @@ def parse_args() -> argparse.Namespace:
         "--character_frame_strategy",
         default="middle",
         choices=["first", "middle", "last"],
-        help="Which frame to sample from each character shot for inter-shot subject consistency.",
+        help="Which frame to sample from each character shot for inter_shot_quality.",
     )
     parser.add_argument("--continue_on_error", action="store_true", help="Record metric errors and continue.")
     return parser.parse_args()
@@ -83,7 +104,10 @@ def main() -> None:
     output_path = args.output / "multishot_eval_results.json"
 
     videos = load_manifest(args.manifest, args.result_root)
-    needs_vbench = bool({"text_alignment", "intra_quality", "inter_shot_quality"} & set(args.metrics))
+    needs_vbench = bool(
+        {"overall_quality", "intra_shot_quality", "inter_shot_quality"}
+        & set(args.metrics)
+    )
     runner = None
     if needs_vbench:
         runner = VBenchMetricRunner(
@@ -112,31 +136,45 @@ def evaluate_video(video: VideoSpec, args: argparse.Namespace, runner: VBenchMet
         "num_shots": len(video.shots),
     }
 
-    if "text_alignment" in args.metrics:
+    if "overall_quality" in args.metrics:
         if runner is None:
-            raise RuntimeError("Text alignment requires VBenchMetricRunner.")
-        result["per_shot_controllability"] = _safe_run(
-            lambda: runner.run_text_alignment(video.id, video.shots, args.text_metric),
+            raise RuntimeError("overall_quality requires VBenchMetricRunner.")
+        overall: dict[str, Any] = {}
+        overall["text_alignment"] = _safe_run(
+            lambda: runner.run_text_alignment(video.id, video.shots, args.text_alignment_metric),
             args.continue_on_error,
         )
+        dim_results = _safe_run(
+            lambda: runner.run_intra_quality(
+                video.id, video.shots, args.overall_quality_dimensions
+            ),
+            args.continue_on_error,
+        )
+        if isinstance(dim_results, dict) and "status" not in dim_results:
+            overall.update(dim_results)
+        else:
+            overall["_dimensions"] = dim_results
+        result["overall_quality"] = overall
 
-    if "sca" in args.metrics:
+    if "shot_structure" in args.metrics:
         result["shot_structure"] = _safe_run(
             lambda: _run_sca(video, args),
             args.continue_on_error,
         )
 
-    if "intra_quality" in args.metrics:
+    if "intra_shot_quality" in args.metrics:
         if runner is None:
-            raise RuntimeError("Intra-shot quality requires VBenchMetricRunner.")
+            raise RuntimeError("intra_shot_quality requires VBenchMetricRunner.")
         result["intra_shot_quality"] = _safe_run(
-            lambda: runner.run_intra_quality(video.id, video.shots, args.intra_quality_dimensions),
+            lambda: runner.run_intra_quality(
+                video.id, video.shots, args.intra_shot_quality_dimensions
+            ),
             args.continue_on_error,
         )
 
     if "inter_shot_quality" in args.metrics:
         if runner is None:
-            raise RuntimeError("Inter-shot quality requires VBenchMetricRunner.")
+            raise RuntimeError("inter_shot_quality requires VBenchMetricRunner.")
         result["inter_shot_quality"] = _safe_run(
             lambda: runner.run_character_subject_consistency(
                 video.id,
@@ -146,11 +184,6 @@ def evaluate_video(video: VideoSpec, args: argparse.Namespace, runner: VBenchMet
             ),
             args.continue_on_error,
         )
-    else:
-        result["inter_shot_quality"] = {
-            "status": "deferred",
-            "reason": "Character-wise inter-shot subject consistency was not requested.",
-        }
     return result
 
 

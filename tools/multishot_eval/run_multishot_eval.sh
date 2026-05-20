@@ -6,7 +6,7 @@ PROMPT_JSON="eval_caption_multishot_t2v.json"
 MANIFEST="eval_caption_multishot_t2v_manifest.json"
 OUTPUT="eval_results/ours"
 DEVICE="cuda"
-TEXT_METRIC="overall_consistency"
+TEXT_ALIGNMENT_METRIC="overall_consistency"
 SCA_DETECTOR="transnetv2"
 SCA_TOLERANCE_SEC=""
 SCA_THRESHOLD="0.5"
@@ -31,7 +31,7 @@ Options:
   --manifest PATH                 Manifest JSON. Default: eval_caption_multishot_t2v_manifest.json
   --output PATH                   Output directory. Default: eval_results/multishot
   --device DEVICE                 Torch device. Default: cuda
-  --text-metric NAME              overall_consistency or clip_score. Default: overall_consistency
+  --text-alignment-metric NAME    overall_consistency or clip_score. Default: overall_consistency
   --sca-detector NAME             transnetv2, opencv, or scenedetect. Default: transnetv2
   --sca-tolerance-sec FLOAT       Optional matching tolerance; omit for minimum-error matching.
   --sca-threshold FLOAT           Detector threshold. Default: 0.5
@@ -72,8 +72,8 @@ while [[ $# -gt 0 ]]; do
       DEVICE="$2"
       shift 2
       ;;
-    --text-metric)
-      TEXT_METRIC="$2"
+    --text-metric|--text-alignment-metric|--overall-quality-metric)
+      TEXT_ALIGNMENT_METRIC="$2"
       shift 2
       ;;
     --sca-detector)
@@ -161,11 +161,12 @@ eval_args=(
   --result_root "$RESULT_ROOT"
   --manifest "$MANIFEST"
   --output "$OUTPUT"
-  --metrics text_alignment sca intra_quality inter_shot_quality
-  --text_metric "$TEXT_METRIC"
-  --intra_quality_dimensions
+  --metrics overall_quality shot_structure intra_shot_quality inter_shot_quality
+  --text_alignment_metric "$TEXT_ALIGNMENT_METRIC"
+  --overall_quality_dimensions
     aesthetic_quality
     dynamic_degree
+  --intra_shot_quality_dimensions
     subject_consistency
     background_consistency
   --device "$DEVICE"
