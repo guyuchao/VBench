@@ -322,7 +322,19 @@ def init_submodules(dimension_list, local=False, read_frame=False, resolution="1
                     print(f"File {details['path']} does not exist. Downloading...")
                     wget_command = ['wget', '-P', os.path.dirname(details['path']),
                                     'https://dl.fbaipublicfiles.com/dino/dino_vitbase16_pretrain/dino_vitbase16_pretrain.pth']
-                    subprocess.run(wget_command, check=True)
+                    import os
+                    import urllib.request
+
+                    if "-O" in wget_command:
+                        output_index = wget_command.index("-O") + 1
+                        save_path = wget_command[output_index]
+                        url = [x for x in wget_command[1:] if x != "-O" and x != save_path][0]
+                    else:
+                        url = wget_command[1]
+                        save_path = os.path.basename(url)
+
+                    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+                    urllib.request.urlretrieve(url, save_path)
             else:
                 submodules_dict[dimension] = {
                     'repo_or_dir':'facebookresearch/dino:main',
@@ -345,7 +357,19 @@ def init_submodules(dimension_list, local=False, read_frame=False, resolution="1
                 vit_b_path = f'{CACHE_DIR}/clip_model/ViT-B-32.pt'
                 if not os.path.isfile(vit_b_path):
                     wget_command = ['wget', 'https://openaipublic.azureedge.net/clip/models/40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af/ViT-B-32.pt', '-P', os.path.dirname(vit_b_path)]
-                    subprocess.run(wget_command, check=True)
+                    import os
+                    import urllib.request
+
+                    if "-O" in wget_command:
+                        output_index = wget_command.index("-O") + 1
+                        save_path = wget_command[output_index]
+                        url = [x for x in wget_command[1:] if x != "-O" and x != save_path][0]
+                    else:
+                        url = wget_command[1]
+                        save_path = os.path.basename(url)
+
+                    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+                    urllib.request.urlretrieve(url, save_path)
             else:
                 vit_b_path = 'ViT-B/32'
             submodules_dict[dimension] = [vit_b_path, read_frame]
@@ -377,7 +401,19 @@ def init_submodules(dimension_list, local=False, read_frame=False, resolution="1
                 unzip_command = ['unzip', '-d', f'{CACHE_DIR}/raft_model/', f'{CACHE_DIR}/raft_model/models.zip']
                 remove_command = ['rm', '-r', f'{CACHE_DIR}/raft_model/models.zip']
                 try:
-                    subprocess.run(wget_command, check=True)
+                    import os
+                    import urllib.request
+
+                    if "-O" in wget_command:
+                        output_index = wget_command.index("-O") + 1
+                        save_path = wget_command[output_index]
+                        url = [x for x in wget_command[1:] if x != "-O" and x != save_path][0]
+                    else:
+                        url = wget_command[1]
+                        save_path = os.path.basename(url)
+
+                    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+                    urllib.request.urlretrieve(url, save_path)
                     subprocess.run(unzip_command, check=True)
                     subprocess.run(remove_command, check=True)
                 except subprocess.CalledProcessError as err:
@@ -402,7 +438,19 @@ def init_submodules(dimension_list, local=False, read_frame=False, resolution="1
                     print(f"File {details['path']} does not exist. Downloading...")
                     wget_command = ['wget', '-P', os.path.dirname(details['path']),
                                     'https://dl.fbaipublicfiles.com/dino/dino_vitbase16_pretrain/dino_vitbase16_pretrain.pth']
-                    subprocess.run(wget_command, check=True)
+                    import os
+                    import urllib.request
+
+                    if "-O" in wget_command:
+                        output_index = wget_command.index("-O") + 1
+                        save_path = wget_command[output_index]
+                        url = [x for x in wget_command[1:] if x != "-O" and x != save_path][0]
+                    else:
+                        url = wget_command[1]
+                        save_path = os.path.basename(url)
+
+                    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+                    urllib.request.urlretrieve(url, save_path)
             else:
                 submodules_dict[dimension] = {
                     'repo_or_dir':'facebookresearch/dino:main',
@@ -416,7 +464,19 @@ def init_submodules(dimension_list, local=False, read_frame=False, resolution="1
                 vit_l_path = f'{CACHE_DIR}/clip_model/ViT-L-14.pt'
                 if not os.path.isfile(vit_l_path):
                     wget_command = ['wget' ,'https://openaipublic.azureedge.net/clip/models/b8cca3fd41ae0c99ba7e8951adf17d267cdb84cd88be6f7c2e0eca1737a03836/ViT-L-14.pt', '-P', os.path.dirname(vit_l_path)]
-                    subprocess.run(wget_command, check=True)
+                    import os
+                    import urllib.request
+
+                    if "-O" in wget_command:
+                        output_index = wget_command.index("-O") + 1
+                        save_path = wget_command[output_index]
+                        url = [x for x in wget_command[1:] if x != "-O" and x != save_path][0]
+                    else:
+                        url = wget_command[1]
+                        save_path = os.path.basename(url)
+
+                    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+                    urllib.request.urlretrieve(url, save_path)
             else:
                 vit_l_path = 'ViT-L/14'
             submodules_dict[dimension] = [vit_l_path, aes_path]

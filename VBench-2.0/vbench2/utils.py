@@ -307,7 +307,19 @@ def init_submodules(dimension_list, local=False, read_frame=False):
                 unzip_command = ['unzip', '-d', f'{CACHE_DIR}/raft_model/', f'{CACHE_DIR}/raft_model/models.zip']
                 remove_command = ['rm', '-r', f'{CACHE_DIR}/raft_model/models.zip']
                 try:
-                    subprocess.run(wget_command, check=True)
+                    import os
+                    import urllib.request
+
+                    if "-O" in wget_command:
+                        output_index = wget_command.index("-O") + 1
+                        save_path = wget_command[output_index]
+                        url = [x for x in wget_command[1:] if x != "-O" and x != save_path][0]
+                    else:
+                        url = wget_command[1]
+                        save_path = os.path.basename(url)
+
+                    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+                    urllib.request.urlretrieve(url, save_path)
                     subprocess.run(unzip_command, check=True)
                     subprocess.run(remove_command, check=True)
                 except subprocess.CalledProcessError as err:
@@ -331,7 +343,19 @@ def init_submodules(dimension_list, local=False, read_frame=False):
                 os.makedirs(f'{CACHE_DIR}/arcface', exist_ok=True)
                 wget_command = ['wget', '-O', details['model'], url]
                 try:
-                    subprocess.run(wget_command, check=True)
+                    import os
+                    import urllib.request
+
+                    if "-O" in wget_command:
+                        output_index = wget_command.index("-O") + 1
+                        save_path = wget_command[output_index]
+                        url = [x for x in wget_command[1:] if x != "-O" and x != save_path][0]
+                    else:
+                        url = wget_command[1]
+                        save_path = os.path.basename(url)
+
+                    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+                    urllib.request.urlretrieve(url, save_path)
                     print("Model downloaded successfully!")
                 except subprocess.CalledProcessError as e:
                     print(f"An error occurred: {e}")
