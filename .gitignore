@@ -198,5 +198,6 @@ VBench-2.0/scripts/temp.py
 # documentations
 README-pypi.md
 eval_results/
-*.json
+tools/multishot_eval/*.json
 tools/TransNetV2-master/inference/*
+.vscode/
