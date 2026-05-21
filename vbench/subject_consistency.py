@@ -46,9 +46,6 @@ def subject_consistency(model, video_list, device, read_frame):
         else:
             images = load_video(video_path)
             images = image_transform(images)
-        if len(images) < 2:
-            video_results.append({'video_path': video_path, 'video_results': None, 'status': 'skipped', 'reason': 'Fewer than two frames available.'})
-            continue
         for i in range(len(images)):
             with torch.no_grad():
                 image = images[i].unsqueeze(0)
@@ -68,7 +65,7 @@ def subject_consistency(model, video_list, device, read_frame):
         sim += video_sim
         video_results.append({'video_path': video_path, 'video_results': sim_per_images})
     # sim_per_video = sim / (len(video_list) - 1)
-    sim_per_frame = sim / cnt if cnt > 0 else 0.0
+    sim_per_frame = sim / cnt
     return sim_per_frame, video_results
 
 
@@ -81,6 +78,5 @@ def compute_subject_consistency(json_dir, device, submodules_list, **kwargs):
     all_results, video_results = subject_consistency(dino_model, video_list, device, read_frame)
     if get_world_size() > 1:
         video_results = gather_list_of_dict(video_results)
-        valid_results = [d['video_results'] for d in video_results if isinstance(d.get('video_results'), (int, float))]
-        all_results = sum(valid_results) / len(valid_results) if valid_results else 0.0
+        all_results = sum([d['video_results'] for d in video_results]) / len(video_results)
     return all_results, video_results

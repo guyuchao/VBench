@@ -7,6 +7,8 @@ from argparse import Namespace
 from pathlib import Path
 from typing import Any
 
+from vbench.distributed import barrier, gather_list_of_dict, get_rank, get_world_size
+
 
 DEFAULT_METRICS = [
     "overall_quality",
@@ -98,7 +100,11 @@ class VBenchMultishot:
             continue_on_error=self.continue_on_error,
         )
 
-        videos = load_manifest(Path(manifest) if manifest is not None else None, Path(result_root))
+        all_videos = load_manifest(Path(manifest) if manifest is not None else None, Path(result_root))
+        rank = get_rank()
+        world_size = get_world_size()
+        videos = all_videos[rank::world_size]
+
         needs_vbench = bool({"overall_quality", "intra_shot_quality", "inter_shot_quality"} & set(metrics))
         runner = None
         if needs_vbench:
@@ -110,18 +116,25 @@ class VBenchMultishot:
                 keep_meta=self.keep_vbench_meta,
             )
 
-        results: dict[str, Any] = {}
+        local_items: list[dict[str, Any]] = []
         for video in videos:
-            results[video.id] = evaluate_video(video, args, runner)
+            local_items.append({"video_id": video.id, "result": evaluate_video(video, args, runner)})
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
                 torch.cuda.ipc_collect()
 
-        if save_json:
+        if world_size > 1:
+            gathered_items = gather_list_of_dict(local_items)
+        else:
+            gathered_items = local_items
+        results = {item["video_id"]: item["result"] for item in gathered_items}
+
+        if save_json and rank == 0:
             output_path = self.output_dir / "multishot_eval_results.json"
             with output_path.open("w", encoding="utf-8") as f:
                 json.dump(results, f, indent=2, ensure_ascii=False)
                 f.write("\n")
+        barrier()
         return results
 
 

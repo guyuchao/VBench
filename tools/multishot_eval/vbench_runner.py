@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 import json
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +13,40 @@ from manifest import ShotSpec
 
 
 TEXT_ALIGNMENT_METRICS = {"overall_consistency", "clip_score"}
+
+
+@contextmanager
+def _single_process_vbench_metric(module: Any):
+    import vbench.distributed as distributed
+
+    def identity(data):
+        return data
+
+    def gather_identity(data):
+        return data
+
+    def all_gather_identity(data):
+        return [data]
+
+    replacements = {
+        "get_world_size": lambda: 1,
+        "get_rank": lambda: 0,
+        "distribute_list_to_rank": identity,
+        "gather_list_of_dict": gather_identity,
+        "all_gather": all_gather_identity,
+        "barrier": lambda: None,
+    }
+    originals = []
+    for target in (distributed, module):
+        for name, replacement in replacements.items():
+            if hasattr(target, name):
+                originals.append((target, name, getattr(target, name)))
+                setattr(target, name, replacement)
+    try:
+        yield
+    finally:
+        for target, name, original in reversed(originals):
+            setattr(target, name, original)
 
 
 class VBenchMetricRunner:
@@ -121,7 +156,8 @@ class VBenchMetricRunner:
 
         submodules = [] if dimension == "clip_score" else self._get_submodules(dimension)
         try:
-            score, details = compute(str(json_path), self.device, submodules)
+            with _single_process_vbench_metric(module):
+                score, details = compute(str(json_path), self.device, submodules)
             result = {
                 "average": _to_jsonable(score),
                 "per_shot": _details_to_per_shot(details),

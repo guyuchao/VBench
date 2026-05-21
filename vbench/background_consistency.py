@@ -38,15 +38,6 @@ def background_consistency(clip_model, preprocess, video_list, device, read_fram
         else:
             images = load_video(video_path)
             images = image_transform(images)
-        if len(images) < 2:
-            video_results.append({
-            'video_path': video_path,
-            'video_results': None,
-            'video_sim': 0.0,
-            'cnt_per_video': 0,
-            'status': 'skipped',
-            'reason': 'Fewer than two frames available.'})
-            continue
         images = images.to(device)
         image_features = clip_model.encode_image(images)
         image_features = F.normalize(image_features, dim=-1, p=2)
@@ -70,7 +61,7 @@ def background_consistency(clip_model, preprocess, video_list, device, read_fram
             'video_sim': video_sim,
             'cnt_per_video': cnt_per_video})
     # sim_per_video = sim / (len(video_list) - 1)
-    sim_per_frame = sim / cnt if cnt > 0 else 0.0
+    sim_per_frame = sim / cnt
     return sim_per_frame, video_results
 
 
@@ -84,6 +75,6 @@ def compute_background_consistency(json_dir, device, submodules_list, **kwargs):
         video_results = gather_list_of_dict(video_results)
         sim = sum([d['video_sim'] for d in video_results])
         cnt = sum([d['cnt_per_video'] for d in video_results])
-        all_results = sim / cnt if cnt > 0 else 0.0
+        all_results = sim / cnt
     return all_results, video_results
 
