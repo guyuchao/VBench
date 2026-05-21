@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+
 import cv2
 
 from manifest import ShotSpec
@@ -130,8 +131,7 @@ class VBenchMetricRunner:
                 result["full_info_json"] = str(json_path)
             return result
         finally:
-            if not self.keep_meta:
-                json_path.unlink(missing_ok=True)
+            pass
 
     def _get_submodules(self, dimension: str) -> Any:
         if dimension not in self._submodules:
@@ -172,8 +172,7 @@ class VBenchMetricRunner:
         return path
 
     def _cleanup_stale_meta(self) -> None:
-        for path in self.meta_dir.glob("*_full_info.json"):
-            path.unlink(missing_ok=True)
+        pass
 
 
 def _details_to_per_shot(details: list[dict[str, Any]]) -> dict[str, Any]:
