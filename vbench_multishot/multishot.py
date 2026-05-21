@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import json
 import os
@@ -58,7 +58,7 @@ class VBenchMultishot:
         self.sca_threshold = sca_threshold
         self.sca_min_gap_sec = sca_min_gap_sec
         self.sca_unmatched_penalty_frames = sca_unmatched_penalty_frames
-        default_transnetv2_path = Path(__file__).resolve().parents[1] / 'tools' / 'TransNetV2-master' / 'inference-pytorch'
+        default_transnetv2_path = Path(__file__).resolve().parents[1] / 'tools' / 'transnetv2' / 'inference_pytorch'
         default_transnetv2_weights = Path(os.environ.get('VBENCH_CACHE_DIR', 'experiments/pretrained_models/vbench')) / 'transnetv2' / 'transnetv2-pytorch-weights.pth'
         self.transnetv2_path = Path(transnetv2_path) if transnetv2_path is not None else default_transnetv2_path
         self.transnetv2_weights = Path(transnetv2_weights) if transnetv2_weights is not None else default_transnetv2_weights

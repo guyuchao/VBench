@@ -251,7 +251,7 @@ def detect_cuts_transnetv2(
 
 def _load_transnetv2(transnetv2_path: Path | None, transnetv2_weights: Path | None) -> Any:
     if transnetv2_path is None:
-        transnetv2_path = Path(__file__).resolve().parents[1] / "TransNetV2-master" / "inference-pytorch"
+        transnetv2_path = Path(__file__).resolve().parents[1] / "transnetv2" / "inference_pytorch"
     transnetv2_path = transnetv2_path.resolve()
     weights_key = str(transnetv2_weights.resolve()) if transnetv2_weights else None
     cache_key = (str(transnetv2_path), weights_key)
@@ -359,7 +359,7 @@ def _resolve_transnetv2_pytorch_weights(transnetv2_path: Path, transnetv2_weight
     if not weights_path.exists():
         raise FileNotFoundError(
             "TransNetV2 PyTorch weights not found. Expected "
-            f"{weights_path}. Run tools/TransNetV2-master/inference-pytorch/convert_weights.py "
+            f"{weights_path}. Run tools/transnetv2/inference_pytorch/convert_weights.py "
             "or pass --transnetv2_weights PATH_TO_PTH."
         )
     return weights_path

@@ -3,3 +3,5 @@ include requirements.txt
 recursive-include vbench/third_party *.yaml
 recursive-include vbench *.json
 recursive-include vbench *.txt
+recursive-include tools/multishot_eval *.py *.json *.md *.sh
+recursive-include tools/transnetv2/inference_pytorch *.py *.pth

@@ -84,8 +84,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--transnetv2_path",
         type=Path,
-        default=REPO_ROOT / "tools" / "TransNetV2-master" / "inference-pytorch",
-        help="Path to the TransNetV2 inference-pytorch directory.",
+        default=REPO_ROOT / "tools" / "transnetv2" / "inference_pytorch",
+        help="Path to the TransNetV2 inference_pytorch directory.",
     )
     parser.add_argument("--transnetv2_weights", type=Path, default=None, help="Optional TransNetV2 .pth weights path.")
     parser.add_argument(

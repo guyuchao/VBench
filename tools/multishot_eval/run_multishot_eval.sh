@@ -12,7 +12,7 @@ SCA_TOLERANCE_SEC=""
 SCA_THRESHOLD="0.5"
 SCA_MIN_GAP_SEC="0.35"
 SCA_UNMATCHED_PENALTY_FRAMES=""
-TRANSNETV2_PATH="tools/TransNetV2-master/inference-pytorch"
+TRANSNETV2_PATH="tools/transnetv2/inference_pytorch"
 TRANSNETV2_WEIGHTS=""
 CHARACTER_FRAME_STRATEGY="middle"
 LOAD_CKPT_FROM_LOCAL=0
@@ -38,7 +38,7 @@ Options:
   --sca-min-gap-sec FLOAT         Minimum gap between detected cuts. Default: 0.35
   --sca-unmatched-penalty-frames FLOAT
                                   Penalty per missed/extra cut. Default: average shot length.
-  --transnetv2-path PATH          TransNetV2 inference-pytorch dir. Default: tools/TransNetV2-master/inference-pytorch
+  --transnetv2-path PATH          TransNetV2 inference_pytorch dir. Default: tools/transnetv2/inference_pytorch
   --transnetv2-weights PATH       Optional TransNetV2 .pth weights path.
   --character-frame-strategy NAME first, middle, or last. Default: middle
   --load-ckpt-from-local          Pass --load_ckpt_from_local to VBench.

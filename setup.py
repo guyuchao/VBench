@@ -49,6 +49,10 @@ setup(name='vbench',
       },
       install_requires=install_requires,
       packages=find_packages(),
+      package_data={
+          'tools.multishot_eval': ['*.json', '*.md', '*.sh'],
+          'tools.transnetv2.inference_pytorch': ['*.pth'],
+      },
       include_package_data=True,
       license='Apache Software License 2.0',
 )
