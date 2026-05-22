@@ -61,8 +61,8 @@ def discover_videos(result_root: Path) -> list[VideoSpec]:
                 root=video_dir,
                 full_video=full_video,
                 shots=shots,
-                target_boundaries_frames=[],
-                target_boundaries_sec=_derive_boundaries_from_shots(shots),
+                target_boundaries_frames=_derive_boundary_frames_from_shots(shots),
+                target_boundaries_sec=_derive_boundary_seconds_from_shots(shots),
             )
         )
     return videos
@@ -112,6 +112,16 @@ def _parse_video_spec(
     if not shots:
         shots = _discover_shots(root, manifest_dir, result_root)
 
+    shot_boundaries_frames = _derive_boundary_frames_from_shots(shots)
+    manifest_boundaries_frames = [
+        int(x)
+        for x in (
+            video_data.get("target_boundaries_frames")
+            or []
+        )
+    ]
+    target_boundaries_frames = shot_boundaries_frames or manifest_boundaries_frames
+
     target_boundaries_sec = [
         float(x)
         for x in (
@@ -121,16 +131,8 @@ def _parse_video_spec(
             or []
         )
     ]
-    if not target_boundaries_sec:
-        target_boundaries_sec = _derive_boundaries_from_shots(shots)
-
-    target_boundaries_frames = [
-        int(x)
-        for x in (
-            video_data.get("target_boundaries_frames")
-            or []
-        )
-    ]
+    if not target_boundaries_frames and not target_boundaries_sec:
+        target_boundaries_sec = _derive_boundary_seconds_from_shots(shots)
 
     return VideoSpec(
         id=video_id,
@@ -207,7 +209,19 @@ def _find_full_video(video_root: Path) -> Path | None:
     return None
 
 
-def _derive_boundaries_from_shots(shots: list[ShotSpec]) -> list[float]:
+def _derive_boundary_frames_from_shots(shots: list[ShotSpec]) -> list[int]:
+    boundaries = []
+    elapsed = 0
+    for shot in shots[:-1]:
+        frame_count = get_video_frame_count(shot.file)
+        if frame_count is None:
+            return []
+        elapsed += frame_count
+        boundaries.append(elapsed)
+    return boundaries
+
+
+def _derive_boundary_seconds_from_shots(shots: list[ShotSpec]) -> list[float]:
     boundaries = []
     elapsed = 0.0
     for shot in shots[:-1]:
@@ -217,6 +231,19 @@ def _derive_boundaries_from_shots(shots: list[ShotSpec]) -> list[float]:
         elapsed += duration
         boundaries.append(elapsed)
     return boundaries
+
+
+def get_video_frame_count(path: Path) -> int | None:
+    if not path.exists():
+        return None
+    cap = cv2.VideoCapture(str(path))
+    try:
+        frames = int(round(cap.get(cv2.CAP_PROP_FRAME_COUNT)))
+        if frames <= 0:
+            return None
+        return frames
+    finally:
+        cap.release()
 
 
 def get_video_duration_sec(path: Path) -> float | None:

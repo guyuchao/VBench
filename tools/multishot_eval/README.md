@@ -23,7 +23,7 @@ The first implementation covers:
 | Category | Metric | Evaluation object | Calculation | Code interface |
 | --- | --- | --- | --- | --- |
 | Per-shot controllability | Text Alignment | Each `shot_X.mp4` and its shot caption | Runs VBench `overall_consistency` by default, or `clip_score` if selected. Scores whether each shot follows its own text prompt. | `VBenchMetricRunner.run_text_alignment(..., metric="overall_consistency")`; CLI: `--metrics text_alignment --text_metric overall_consistency` |
-| Shot structure | Transition Control / SCA | `full.mp4` in each result video folder | Runs TransNetV2 on `full.mp4` to predict cut frames, compares them with manifest `target_boundaries_frames`, then computes `SCA = exp(-NSD)` where `NSD = (E_matched + E_penalty) / total_frames`. | `evaluate_sca(...)`; CLI: `--metrics sca --sca_detector transnetv2 --sca_threshold 0.5` |
+| Shot structure | Transition Control / SCA | `full.mp4` in each result video folder | Runs TransNetV2 on `full.mp4` to predict cut frames, compares them with target cut frames derived from cumulative saved `shot_X.mp4` frame counts, then computes `SCA = exp(-NSD)` where `NSD = (E_matched + E_penalty) / total_frames`. | `evaluate_sca(...)`; CLI: `--metrics sca --sca_detector transnetv2 --sca_threshold 0.5` |
 | Intra-shot quality | Aesthetic Quality | Each `shot_X.mp4` | Runs VBench `aesthetic_quality` on each shot, then reports per-shot and average scores. | `VBenchMetricRunner.run_intra_quality(..., ["aesthetic_quality"])`; CLI: `--metrics intra_quality --intra_quality_dimensions aesthetic_quality` |
 | Intra-shot quality | Dynamic Degree | Each `shot_X.mp4` | Runs VBench `dynamic_degree` to measure whether the shot has enough motion dynamics. | `VBenchMetricRunner.run_intra_quality(..., ["dynamic_degree"])`; CLI: `--intra_quality_dimensions dynamic_degree` |
 | Intra-shot quality | Intra-shot Subject Consistency | Each `shot_X.mp4` | Runs VBench `subject_consistency` within each shot. This is the native VBench version, not YOLO/SAM-masked character matching. | `VBenchMetricRunner.run_intra_quality(..., ["subject_consistency"])`; CLI: `--intra_quality_dimensions subject_consistency` |
@@ -66,7 +66,7 @@ python tools/multishot_eval/run_eval.py \
   --metrics text_alignment sca intra_quality inter_shot_quality
 ```
 
-For SCA, `target_boundaries_frames` is preferred. When converting from `eval_caption_multishot_t2v*.json`, it is computed from source `switch_latent_frames` with `target_frame = (switch_latent_frame - 1) * 4 + 1`. If frame targets are absent, the tool falls back to `target_boundaries_sec`, then to cumulative `shot_X.mp4` durations.
+For SCA, target cut frames are derived first from the actual saved `shot_X.mp4` files by cumulatively summing their frame counts. If any saved shot frame count cannot be read, the tool falls back to manifest `target_boundaries_frames`, then manifest `target_boundaries_sec`, then cumulative `shot_X.mp4` durations. When converting from `eval_caption_multishot_t2v*.json`, manifest frame targets are still recorded from source `switch_latent_frames` with `target_frame = (switch_latent_frame - 1) * 4 + 1`, but they are now only a fallback when saved shot frame counts are unavailable.
 
 Convert prompts from `eval_caption_multishot_t2v_sample.json`:
 
