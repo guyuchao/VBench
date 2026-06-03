@@ -1,34 +1,29 @@
-import io
+
 import os
 import re
 import yaml
-import cv2
-import json
-import random
+
 import numpy as np
 
 from PIL import Image
-from tqdm import tqdm
+
 from pathlib import Path
 from bisect import bisect_left
 
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 import torchvision.transforms as transforms
 import imageio
 from decord import VideoReader
 
 from collections import defaultdict
-from vbench.utils import CACHE_DIR, load_video, save_json, load_dimension_info, dino_transform, dino_transform_Image
+from vbench.utils import  load_video, save_json
 import logging
 logging.basicConfig(level = logging.INFO,format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-from scenedetect import open_video, SceneManager, split_video_ffmpeg
+from scenedetect import open_video, SceneManager
 from scenedetect.detectors import ContentDetector
-from scenedetect.video_splitter import split_video_ffmpeg
-from moviepy.editor import VideoFileClip
+
 from scipy.stats import rankdata
 
 def write_video(filename, video_array, fps, *args, **kwargs):
