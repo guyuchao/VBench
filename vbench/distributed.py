@@ -1,6 +1,5 @@
 import os
 import torch
-import pickle
 
 import torch.distributed
 
@@ -50,56 +49,9 @@ def all_gather(data):
     if world_size == 1:
         return [data]
 
-    # serialized to a Tensor
-    origin_size = None
-    if not isinstance(data, torch.Tensor):
-        buffer = pickle.dumps(data)
-        storage = torch.ByteStorage.from_buffer(buffer)
-        tensor = torch.ByteTensor(storage).to("cuda")
-    else:
-        origin_size = data.size()
-        tensor = data.reshape(-1)
-
-    tensor_type = tensor.dtype
-
-    # obtain Tensor size of each rank
-    local_size = torch.LongTensor([tensor.numel()]).to("cuda")
-    size_list = [torch.LongTensor([0]).to("cuda") for _ in range(world_size)]
-    torch.distributed.all_gather(size_list, local_size)
-    size_list = [int(size.item()) for size in size_list]
-    max_size = max(size_list)
-
-    # receiving Tensor from all ranks
-    # we pad the tensor because torch all_gather does not support
-    # gathering tensors of different shapes
-    tensor_list = []
-    for _ in size_list:
-        tensor_list.append(torch.FloatTensor(size=(max_size,)).cuda().to(tensor_type))
-    if local_size != max_size:
-        padding = torch.FloatTensor(size=(max_size - local_size,)).cuda().to(tensor_type)
-        tensor = torch.cat((tensor, padding), dim=0)
-    torch.distributed.all_gather(tensor_list, tensor)
-
-    data_list = []
-    for size, tensor in zip(size_list, tensor_list):
-        if origin_size is None:
-            buffer = tensor.cpu().numpy().tobytes()[:size]
-            data_list.append(pickle.loads(buffer))
-        else:
-            buffer = tensor[:size]
-            data_list.append(buffer)
-
-    if origin_size is not None:
-        new_shape = [-1] + list(origin_size[1:])
-        resized_list = []
-        for data in data_list:
-            # suppose the difference of tensor size exist in first dimension
-            data = data.reshape(new_shape)
-            resized_list.append(data)
-
-        return resized_list
-    else:
-        return data_list
+    data_list = [None for _ in range(world_size)]
+    torch.distributed.all_gather_object(data_list, data)
+    return data_list
 
 
 def barrier():
