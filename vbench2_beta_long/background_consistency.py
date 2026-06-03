@@ -44,7 +44,12 @@ def compute_long_background_consistency(json_dir, device, submodules_list, **kwa
             all_results, video_results = background_consistency(clip_model, preprocess, video_list, device, read_frame)
         elif kwargs['bg_clip2clip_feat_extractor'] == 'dreamsim':
             read_frame = submodules_list[1]
-            cache_dir = os.path.expanduser("~/.cache")
+            # cache_dir = os.path.expanduser("~/.cache")
+            # dreamsim_model, preprocess = dreamsim(pretrained=True, cache_dir=cache_dir)
+            cache_dir = os.environ.get("DREAMSIM_CACHE_DIR", os.environ.get("VBENCH_CACHE_DIR",               
+            os.path.expanduser("~/.cache")))                                                                  
+            cache_dir = os.path.join(cache_dir, "dreamsim")                                                   
+            os.makedirs(cache_dir, exist_ok=True)                                                             
             dreamsim_model, preprocess = dreamsim(pretrained=True, cache_dir=cache_dir)
             all_results, video_results = background_consistency_dreamsim(dreamsim_model, preprocess, video_list, device, read_frame)
         return all_results, video_results
