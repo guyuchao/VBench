@@ -16,7 +16,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.transforms as transforms
-from torchvision.io import write_video
+import imageio
 from decord import VideoReader
 
 from collections import defaultdict
@@ -31,6 +31,14 @@ from scenedetect.video_splitter import split_video_ffmpeg
 from moviepy.editor import VideoFileClip
 from scipy.stats import rankdata
 
+def write_video(filename, video_array, fps, *args, **kwargs):
+    if hasattr(video_array, 'detach'):
+        video_array = video_array.detach().cpu()
+    if hasattr(video_array, 'numpy'):
+        video_array = video_array.numpy()
+
+    video_array = np.clip(np.asarray(video_array), 0, 255).astype(np.uint8)
+    imageio.mimsave(filename, video_array, fps=fps)
 ###################################################################################################
 # Consistency Dimensions' Score Distribution Transformation
 
@@ -116,7 +124,7 @@ def save_video_by_scene_list(video_path, video_name, scene_list, output_dir=None
             output_filename = os.path.join(output_dir, f"{video_name}-Scene-{i}.mp4")
         else:
             output_filename = os.path.join(output_dir, f"{video_name}-Scene-{i}.mp4")
-
+        
         write_video(output_filename, current_scene_frames, fps=fps)
 
 
