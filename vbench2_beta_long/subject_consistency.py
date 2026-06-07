@@ -60,8 +60,7 @@ def compute_long_subject_consistency(json_dir, device, submodules_list, **kwargs
             read_frame = submodules_list['read_frame']
             # cache_dir = os.path.expanduser("~/.cache")
             # dreamsim_model, _ = dreamsim(pretrained=True, cache_dir=cache_dir)
-            cache_dir = os.environ.get("DREAMSIM_CACHE_DIR", os.environ.get("VBENCH_CACHE_DIR",               
-            os.path.expanduser("~/.cache")))                                                                  
+            cache_dir = os.environ.get("DREAMSIM_CACHE_DIR", os.environ.get("VBENCH_CACHE_DIR", os.path.expanduser("~/.cache")))                                                                  
             cache_dir = os.path.join(cache_dir, "dreamsim")                                                   
             os.makedirs(cache_dir, exist_ok=True)                                                             
             dreamsim_model, preprocess = dreamsim(pretrained=True, cache_dir=cache_dir)

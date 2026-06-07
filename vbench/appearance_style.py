@@ -11,8 +11,6 @@ from vbench.utils import load_video, load_dimension_info, clip_transform, read_f
 from .distributed import (
     get_world_size,
     get_rank,
-    all_gather,
-    barrier,
     distribute_list_to_rank,
     gather_list_of_dict,
 )
@@ -71,14 +69,24 @@ def appearance_style(clip_model, video_dict, device, sample="rand"):
                     'frame_results': cur_video,
                     'cur_sim': cur_sim})
     sim_per_frame = sim / cnt
-    return sim_per_frame, video_results
+    return sim_per_frame, video_results, sim, cnt
+
+def drop_frame_results(video_results):
+    slim_video_results = []
+    for video_result in video_results:
+        slim_video_result = dict(video_result)
+        slim_video_result.pop('frame_results', None)
+        slim_video_results.append(slim_video_result)
+    return slim_video_results
 
 def compute_appearance_style(json_dir, device, submodules_list, **kwargs):
     clip_model, preprocess = clip.load(device=device, **submodules_list)
     _, video_dict = load_dimension_info(json_dir, dimension='appearance_style', lang='en')
     video_dict = distribute_list_to_rank(video_dict)
-    all_results, video_results = appearance_style(clip_model, video_dict, device)
+    all_results, video_results, sim, cnt = appearance_style(clip_model, video_dict, device)
     if get_world_size() > 1:
-        video_results = gather_list_of_dict(video_results)
-        all_results = sum([d['cur_sim'] for d in video_results]) / len(video_results)
+        stats = torch.tensor([sim, cnt], dtype=torch.float64, device=device)
+        torch.distributed.all_reduce(stats, op=torch.distributed.ReduceOp.SUM)
+        all_results = float(stats[0].item() / stats[1].item())
+        video_results = gather_list_of_dict(drop_frame_results(video_results))
     return all_results, video_results
