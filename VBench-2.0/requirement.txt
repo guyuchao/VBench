@@ -1,3 +1,5 @@
+# Legacy standalone environment snapshot. setup.py intentionally does not
+# consume this full lock file, and FAR should keep its own training versions.
 accelerate==1.2.1
 addict==2.4.0
 aiohappyeyeballs==2.4.4
@@ -171,7 +173,7 @@ tokenizers==0.21.1
 tomli==2.2.1
 tqdm==4.67.1
 traitlets==5.14.3
-transformers==4.51.0
+transformers
 triton==3.1.0
 typing_extensions==4.12.2
 tzdata==2024.2

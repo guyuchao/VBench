@@ -130,13 +130,9 @@ def compute_composition(json_dir, device, submodules_dict, **kwargs):
     _, prompt_dict_ls = load_dimension_info(json_dir, dimension='composition', lang='en')
     
     model_name = "llava_qwen"
-    device_map = "auto"
-    try:
-        pretrained = submodules_dict['llava']
-        llava_tokenizer, llava_model, image_processor, max_length = load_pretrained_model(pretrained, None, model_name, torch_dtype="bfloat16", device_map=device_map)  # Add any other thing you want to pass in llava_model_args
-    except:
-        pretrained = "lmms-lab/LLaVA-Video-7B-Qwen2"
-        llava_tokenizer, llava_model, image_processor, max_length = load_pretrained_model(pretrained, None, model_name, torch_dtype="bfloat16", device_map=device_map)  # Add any other thing you want to pass in llava_model_args
+    device_map = {"": device}
+    pretrained = submodules_dict['llava']
+    llava_tokenizer, llava_model, image_processor, max_length = load_pretrained_model(pretrained, None, model_name, torch_dtype="bfloat16", device_map=device_map, attn_implementation=None)  # Add any other thing you want to pass in llava_model_args
     llava_model.eval()
     
     all_results, video_results = LLaVA_Video(prompt_dict_ls, llava_model, llava_tokenizer, image_processor, device)

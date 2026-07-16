@@ -13,9 +13,14 @@ from tqdm import tqdm
 
 
 class VGG(nn.Module):
-    def __init__(self):
+    def __init__(self, model_path=None):
         super(VGG, self).__init__()
-        self.features = vgg19(pretrained=True).features.eval()
+        model = vgg19(weights=None)
+        if model_path is None:
+            model = vgg19(pretrained=True)
+        else:
+            model.load_state_dict(torch.load(model_path, map_location='cpu'))
+        self.features = model.features.eval()
 
     def forward(self, x):
         features = []
@@ -86,7 +91,7 @@ def Diversity(prompt_dict_ls, model, device):
 
 def compute_diversity(json_dir, device, submodules_dict, **kwargs):
     _, prompt_dict_ls = load_dimension_info(json_dir, dimension='diversity', lang='en')
-    model = VGG().to(device)
+    model = VGG(submodules_dict.get('model')).to(device)
     
     all_results, video_results = Diversity(prompt_dict_ls, model, device)
     all_results = sum([d['video_results'] for d in video_results]) / len(video_results)

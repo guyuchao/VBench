@@ -1,3 +1,5 @@
+import os
+
 _base_ = ('mmyolo/configs/yolov8/'
           'yolov8_x_syncbn_fast_8xb16-500e_coco.py')
 custom_imports = dict(imports=['yolo_world'],
@@ -15,9 +17,17 @@ neck_num_heads = [4, 8, _base_.last_stage_out_channels // 2 // 32]
 base_lr = 2e-3
 weight_decay = 0.05 / 2
 train_batch_size_per_gpu = 16
-text_model_name = '../pretrained_models/clip-vit-base-patch32-projection'
-# text_model_name = 'openai/clip-vit-base-patch32'
-text_model_name = '/mnt/petrelfs/zhengdian/code/ckpt/clip-vit-base-patch32'
+_package_dir = os.environ.get(
+    'VBENCH2_PACKAGE_DIR', os.path.abspath('vbench2')
+)
+_config_dir = os.path.join(_package_dir, 'third_party/YOLO-World')
+_cache_dir = os.environ.get(
+    'VBENCH2_CACHE_DIR', os.path.expanduser('~/.cache/vbench2')
+)
+text_model_name = os.environ.get(
+    'VBENCH2_YOLO_TEXT_MODEL',
+    os.path.join(_cache_dir, 'openai/clip-vit-base-patch32'),
+)
 
 # scaling model from X to XL
 deepen_factor = 1.0
@@ -135,12 +145,14 @@ coco_val_dataset = dict(
     _delete_=True,
     type='MultiModalDataset',
     dataset=dict(type='YOLOv5LVISV1Dataset',
-                 data_root='vbench2/third_party/YOLO-World/data/coco/',
+                 data_root=os.path.join(_config_dir, 'data/coco/'),
                  test_mode=True,
                  ann_file='lvis/lvis_v1_minival_inserted_image_name.json',
                  data_prefix=dict(img=''),
                  batch_shapes_cfg=None),
-    class_text_path='vbench2/third_party/YOLO-World/data/texts/lvis_v1_class_texts.json',
+    class_text_path=os.path.join(
+        _config_dir, 'data/texts/lvis_v1_class_texts.json'
+    ),
     pipeline=test_pipeline)
 val_dataloader = dict(dataset=coco_val_dataset)
 test_dataloader = val_dataloader

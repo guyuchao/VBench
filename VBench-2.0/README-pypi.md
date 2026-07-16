@@ -17,14 +17,14 @@ This project is the PyPI implementation of the following research:
 ## Installation
 ```
 conda install psutil
-pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu118
-python -m pip install ninja
-python -m pip install git+https://github.com/Dao-AILab/flash-attention.git@v2.7.2.post1
+# Install PyTorch and torchvision for your platform first. VBench-2.0 does
+# not require a specific CUDA version, and FlashAttention is optional.
 pip install vbench2
 pip install -e git+https://github.com/openai/CLIP.git@dcba3cb2e2827b402d2701e7e1c7d9fed8a20ef1#egg=clip
 pip install -e git+https://github.com/LLaVA-VL/LLaVA-NeXT@79ef45a6d8b89b92d7a8525f077c3a3a9894a87d#egg=llava
 pip install -e git+https://github.com/AILab-CVC/YOLO-World.git@4826695a84ce370dad7fe4cb555a6c7162f3751d#egg=yolo_world
-pip install mmcv==2.2.0 -f https://download.openmmlab.com/mmcv/dist/cu118/torch2.4/index.html --no-cache-dir
+# Install mmcv 2.0.x from a wheel or source build matched to the active
+# PyTorch, CUDA, and machine architecture.
 pip install retinaface_pytorch==0.0.8 --no-deps
 ```
 

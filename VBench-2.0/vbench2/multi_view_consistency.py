@@ -34,13 +34,20 @@ class CameraPredict:
         self.device = device
         self.grid_size = 10
         self.number_points = 1
-        try:
+        if submodules_list.get('checkpoint'):
+            self.model = torch.hub.load(
+                submodules_list['repo'],
+                submodules_list['model'],
+                source='local',
+                pretrained=False,
+            )
+            state_dict = torch.load(
+                submodules_list['checkpoint'], map_location='cpu'
+            )
+            self.model.model.load_state_dict(state_dict)
+        else:
             self.model = torch.hub.load(submodules_list["repo"], submodules_list["model"]).to(self.device)
-        except:
-            # workaround for CERTIFICATE_VERIFY_FAILED (see: https://github.com/pytorch/pytorch/issues/33288#issuecomment-954160699)
-            import ssl
-            ssl._create_default_https_context = ssl._create_unverified_context
-            self.model = torch.hub.load(submodules_list["repo"], submodules_list["model"]).to(self.device)
+        self.model = self.model.to(self.device)
 
     def transform360(self, vector):
         up=[]
