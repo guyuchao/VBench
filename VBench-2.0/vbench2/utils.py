@@ -19,7 +19,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.transforms as transforms
-from torchvision.io import write_video
 from decord import VideoReader, cpu
 from torchvision import transforms
 from torchvision.transforms import Compose, Resize, CenterCrop, ToTensor, Normalize, ToPILImage
@@ -37,6 +36,8 @@ except ImportError:
 CACHE_DIR = os.environ.get('VBENCH2_CACHE_DIR')
 if CACHE_DIR is None:
     CACHE_DIR = os.path.join(os.path.expanduser('~'), '.cache', 'vbench2')
+PACKAGE_DIR = Path(__file__).resolve().parent
+os.environ['VBENCH2_PACKAGE_DIR'] = str(PACKAGE_DIR)
 from .distributed import (
     get_rank,
     barrier,
@@ -259,10 +260,12 @@ def clone_model(repo_url, target_dir):
         print(f"An error occurred: {e}")
 
 
-def hug_model(model_name, local_dir):
+def hug_model(model_name, local_dir, local=False):
     if os.path.exists(local_dir) and os.listdir(local_dir):
         print(f"File exists: {local_dir}")
         return local_dir
+    if local:
+        raise FileNotFoundError(f'Missing local VBench2 model: {local_dir}')
     print(f"File {local_dir} does not exist. Downloading...")
     os.makedirs(local_dir, exist_ok=True)
     download_command = [
@@ -277,7 +280,9 @@ def hug_model(model_name, local_dir):
     else:
         print("Error occur:", result.stderr)
 
-def google_drive(model, file_id, output_path):
+def google_drive(model, file_id, output_path, local=False):
+    if local:
+        raise FileNotFoundError(f'Missing local VBench2 model: {output_path}')
     file = f"{CACHE_DIR}/{model}"
     url = f"https://drive.google.com/uc?id={file_id}"
     os.makedirs(file, exist_ok=True)
@@ -286,6 +291,21 @@ def google_drive(model, file_id, output_path):
         print(f"Model downloaded successfully to: {output_path}")
     except Exception as e:
         print(f"An error occurred: {e}")
+
+
+def local_huggingface_snapshot(model_id):
+    model_root = (
+        Path(CACHE_DIR) / 'hub' / f"models--{model_id.replace('/', '--')}"
+    )
+    ref_path = model_root / 'refs' / 'main'
+    if ref_path.is_file():
+        snapshot_path = model_root / 'snapshots' / ref_path.read_text().strip()
+        if snapshot_path.is_dir():
+            return str(snapshot_path)
+    snapshots = sorted((model_root / 'snapshots').glob('*'))
+    if len(snapshots) == 1 and snapshots[0].is_dir():
+        return str(snapshots[0])
+    return None
         
 def init_submodules(dimension_list, local=False, read_frame=False):
     submodules_dict = {}
@@ -297,11 +317,14 @@ def init_submodules(dimension_list, local=False, read_frame=False):
         if dimension == 'Multi-View_Consistency':
             submodules_dict[dimension] = {
                 'raft': f'{CACHE_DIR}/raft_model/models/raft-things.pth',
-                "repo":"facebookresearch/co-tracker",
-                "model":"cotracker2"
+                "repo": f'{CACHE_DIR}/hub/facebookresearch_co-tracker_main',
+                "model": "cotracker2",
+                "checkpoint": f'{CACHE_DIR}/hub/checkpoints/cotracker2.pth',
             }
             details = submodules_dict[dimension]
             if not os.path.isfile(details['raft']):
+                if local:
+                    raise FileNotFoundError(f"Missing local VBench2 model: {details['raft']}")
                 print(f"File {details['raft']} does not exist. Downloading...")
                 wget_command = ['wget', '-P', f'{CACHE_DIR}/raft_model/', 'https://dl.dropboxusercontent.com/s/4j4z58wuv8o0mfz/models.zip']
                 unzip_command = ['unzip', '-d', f'{CACHE_DIR}/raft_model/', f'{CACHE_DIR}/raft_model/models.zip']
@@ -312,19 +335,48 @@ def init_submodules(dimension_list, local=False, read_frame=False):
                     subprocess.run(remove_command, check=True)
                 except subprocess.CalledProcessError as err:
                     print(f"Error during downloading RAFT model: {err}")
+            if local:
+                for path in (details['repo'], details['checkpoint']):
+                    if not os.path.exists(path):
+                        raise FileNotFoundError(f'Missing local VBench2 model: {path}')
+            elif not all(os.path.exists(path) for path in (details['repo'], details['checkpoint'])):
+                details.update(repo='facebookresearch/co-tracker', checkpoint=None)
                 
         elif dimension == 'Camera_Motion':
             submodules_dict[dimension] = {
-                "repo":"facebookresearch/co-tracker",
-                "model":"cotracker2"
+                "repo": f'{CACHE_DIR}/hub/facebookresearch_co-tracker_main',
+                "model": "cotracker2",
+                "checkpoint": f'{CACHE_DIR}/hub/checkpoints/cotracker2.pth',
             }
+            details = submodules_dict[dimension]
+            if local:
+                for path in (details['repo'], details['checkpoint']):
+                    if not os.path.exists(path):
+                        raise FileNotFoundError(f'Missing local VBench2 model: {path}')
+            elif not all(os.path.exists(path) for path in (details['repo'], details['checkpoint'])):
+                details.update(repo='facebookresearch/co-tracker', checkpoint=None)
+
+        elif dimension == 'Diversity':
+            model_path = f'{CACHE_DIR}/hub/checkpoints/vgg19-dcbb9e9d.pth'
+            submodules_dict[dimension] = {
+                'model': model_path if os.path.isfile(model_path) else None
+            }
+            details = submodules_dict[dimension]
+            if local and details['model'] is None:
+                raise FileNotFoundError(f"Missing local VBench2 model: {model_path}")
             
         elif dimension == 'Human_Identity':
             submodules_dict[dimension] = {
-                "model":f'{CACHE_DIR}/arcface/resnet18_110.pth'
+                "model": f'{CACHE_DIR}/arcface/resnet18_110.pth',
+                "retina": (
+                    f'{CACHE_DIR}/hub/checkpoints/'
+                    'retinaface_resnet50_2020-07-20-f168fae3c.zip'
+                ),
             }
             details = submodules_dict[dimension]
             if not os.path.isfile(details['model']):
+                if local:
+                    raise FileNotFoundError(f"Missing local VBench2 model: {details['model']}")
                 print(f"File {details['model']} does not exist. Downloading...")
                 file_id = "1m387vGTQ4GW4I4PQfBsCC-Y9aEp6zjvy"
                 url = f"https://drive.google.com/uc?id={file_id}&export=download"
@@ -335,13 +387,22 @@ def init_submodules(dimension_list, local=False, read_frame=False):
                     print("Model downloaded successfully!")
                 except subprocess.CalledProcessError as e:
                     print(f"An error occurred: {e}")
+            if not os.path.isfile(details['retina']):
+                if local:
+                    raise FileNotFoundError(f"Missing local VBench2 model: {details['retina']}")
+                details['retina'] = None
         
         elif dimension == 'Instance_Preservation':
             submodules_dict[dimension] = {
-                "model":f'{CACHE_DIR}/instance_anomaly_detector/model'
+                "model": f'{CACHE_DIR}/instance_anomaly_detector/model',
+                "base_model": local_huggingface_snapshot(
+                    'Qwen/Qwen2.5-VL-3B-Instruct'
+                ),
             }
             details = submodules_dict[dimension]
             if not os.path.isdir(details['model']):
+                if local:
+                    raise FileNotFoundError(f"Missing local VBench2 model: {details['model']}")
                 print(f"File {details['model']} does not exist. Downloading...")
                 
                 file = f"{CACHE_DIR}/instance_anomaly_detector"
@@ -353,12 +414,17 @@ def init_submodules(dimension_list, local=False, read_frame=False):
                     print(f"Model downloaded successfully to: {output_path}")
                 except Exception as e:
                     print(f"An error occurred: {e}")
+            if local and details['base_model'] is None:
+                raise FileNotFoundError(
+                    'Missing local VBench2 model: Qwen/Qwen2.5-VL-3B-Instruct'
+                )
         
         elif dimension == 'Human_Anatomy':
-            default_config = 'vbench2/third_party/ViTDetector/simmim_finetune__vit_base__img224__800ep.yaml'
+            default_config = str(PACKAGE_DIR / 'third_party/ViTDetector/simmim_finetune__vit_base__img224__800ep.yaml')
             submodules_dict[dimension] = {
-                "detector_config": "vbench2/third_party/YOLO-World/yolo_world_v2_xl_vlpan_bn_2e-3_100e_4x8gpus_obj365v1_goldg_train_lvis_minival.py",
+                "detector_config": str(PACKAGE_DIR / 'third_party/YOLO-World/yolo_world_v2_xl_vlpan_bn_2e-3_100e_4x8gpus_obj365v1_goldg_train_lvis_minival.py'),
                 "detector_weights":f'{CACHE_DIR}/YOLO-World/yolo_world_v2_xl_obj365v1_goldg_cc3mlite_pretrain-5daf1395.pth',
+                "text_model": f'{CACHE_DIR}/openai/clip-vit-base-patch32',
                 "analyzer_configs": {
                     "human": {"cfg_path": default_config, "weight_path": f"{CACHE_DIR}/anomaly_detector/human.pth", "threshold": 0.4545454545454546},
                     "face": {"cfg_path": default_config, "weight_path": f"{CACHE_DIR}/anomaly_detector/face.pth", "threshold": 0.30303030303030304},
@@ -369,25 +435,35 @@ def init_submodules(dimension_list, local=False, read_frame=False):
             details = submodules_dict[dimension]
             if not os.path.isfile(details['detector_weights']):
                 print(f"File {details['detector_weights']} does not exist. Downloading...")
-                google_drive(model="YOLO-World", file_id="1qo-K1kum7yiEwIlN1TWDvABXX6qriUen", output_path=details['detector_weights'])
+                google_drive(model="YOLO-World", file_id="1qo-K1kum7yiEwIlN1TWDvABXX6qriUen", output_path=details['detector_weights'], local=local)
                 
             if not os.path.isfile(details['analyzer_configs']['human']['weight_path']):
                 print(f"File {details['analyzer_configs']['human']['weight_path']} does not exist. Downloading...")
-                google_drive(model="anomaly_detector", file_id="1mlSURYOi_vN9ST1wzEhJaVO6-ZoES8UT", output_path=details['analyzer_configs']['human']['weight_path'])
+                google_drive(model="anomaly_detector", file_id="1mlSURYOi_vN9ST1wzEhJaVO6-ZoES8UT", output_path=details['analyzer_configs']['human']['weight_path'], local=local)
                 
             if not os.path.isfile(details['analyzer_configs']['face']['weight_path']):
                 print(f"File {details['analyzer_configs']['face']['weight_path']} does not exist. Downloading...")
-                google_drive(model="anomaly_detector", file_id="1e2qTjrtsYlkWLql0qj8DqaNZ09KuV8Qo", output_path=details['analyzer_configs']['face']['weight_path'])
+                google_drive(model="anomaly_detector", file_id="1e2qTjrtsYlkWLql0qj8DqaNZ09KuV8Qo", output_path=details['analyzer_configs']['face']['weight_path'], local=local)
                 
             if not os.path.isfile(details['analyzer_configs']['hand']['weight_path']):
                 print(f"File {details['analyzer_configs']['hand']['weight_path']} does not exist. Downloading...")
-                google_drive(model="anomaly_detector", file_id="1j3QeAcAtdLe5BFgK-c33UaHV6-iUto0i", output_path=details['analyzer_configs']['hand']['weight_path'])
+                google_drive(model="anomaly_detector", file_id="1j3QeAcAtdLe5BFgK-c33UaHV6-iUto0i", output_path=details['analyzer_configs']['hand']['weight_path'], local=local)
+            if local and not os.path.isdir(details['text_model']):
+                raise FileNotFoundError(
+                    f"Missing local VBench2 model: {details['text_model']}"
+                )
+            os.environ['VBENCH2_YOLO_TEXT_MODEL'] = (
+                details['text_model']
+                if os.path.isdir(details['text_model'])
+                else 'openai/clip-vit-base-patch32'
+            )
                     
         elif dimension in ["Human_Clothes", "Composition", "Dynamic_Spatial_Relationship", "Dynamic_Attribute", "Motion_Rationality", "Mechanics", "Thermotics", "Material"]:
             submodules_dict[dimension] = {"llava": f'{CACHE_DIR}/lmms-lab/LLaVA-Video-7B-Qwen2'}
             hug_model(
                 model_name='lmms-lab/LLaVA-Video-7B-Qwen2',
-                local_dir=submodules_dict[dimension]['llava']
+                local_dir=submodules_dict[dimension]['llava'],
+                local=local,
             )
                 
         elif dimension in ["Complex_Landscape", "Complex_Plot", "Human_Interaction", "Motion_Order_Understanding"]:
@@ -397,11 +473,13 @@ def init_submodules(dimension_list, local=False, read_frame=False):
             }
             hug_model(
                 model_name='lmms-lab/LLaVA-Video-7B-Qwen2',
-                local_dir=submodules_dict[dimension]['llava']
+                local_dir=submodules_dict[dimension]['llava'],
+                local=local,
             )
             hug_model(
                 model_name='Qwen/Qwen2.5-7B-Instruct',
-                local_dir=submodules_dict[dimension]['qwen']
+                local_dir=submodules_dict[dimension]['qwen'],
+                local=local,
             )
         else:
             submodules_dict[dimension]={}
