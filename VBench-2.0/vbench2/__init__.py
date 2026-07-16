@@ -1,9 +1,41 @@
 import os
+import time
+from numbers import Real
 
-from .utils import get_prompt_from_filename, init_submodules, save_json, load_json
 import importlib
-from itertools import chain
 from pathlib import Path
+
+from .distributed import barrier, distribute_list_to_rank, get_rank, print0
+from .utils import get_prompt_from_filename, init_submodules, save_json, load_json
+
+
+def _load_dimension_result(path, dimension):
+    try:
+        result = load_json(path)
+    except (OSError, ValueError):
+        return None
+    if not isinstance(result, dict) or dimension not in result:
+        return None
+    payload = result[dimension]
+    if not isinstance(payload, list) or len(payload) != 2:
+        return None
+    if not isinstance(payload[0], Real):
+        return None
+    return payload
+
+
+def _save_json_atomic(data, path):
+    temporary_path = f'{path}.rank{get_rank()}.tmp'
+    save_json(data, temporary_path)
+    os.replace(temporary_path, path)
+
+
+def _dimension_result_path(output_path, name, dimension):
+    return os.path.join(output_path, f'{name}_{dimension}_eval_results.json')
+
+
+def _dimension_error_path(output_path, name, dimension):
+    return os.path.join(output_path, f'{name}_{dimension}_eval_error.json')
 
 
 class VBench2(object):
@@ -68,7 +100,7 @@ class VBench2(object):
                 if set(dimension_list) & set(prompt_dict["dimension"]): 
                     prompt = prompt_dict['prompt_en']
                     prompt_dict['video_list'] = []
-                    if prompt_dict["dimension"][0]=='Diversity':
+                    if 'Diversity' in prompt_dict["dimension"]:
                         num=20
                     else:
                         num=3
@@ -85,32 +117,112 @@ class VBench2(object):
                     cur_full_info_list.append(prompt_dict)
 
         cur_full_info_path = os.path.join(self.output_path, name+'_full_info.json')
-        save_json(cur_full_info_list, cur_full_info_path)
-        print(f'Evaluation meta data saved to {cur_full_info_path}')
+        if get_rank() == 0:
+            save_json(cur_full_info_list, cur_full_info_path)
+        print0(f'Evaluation meta data saved to {cur_full_info_path}')
+        barrier()
         return cur_full_info_path
 
 
     def evaluate(self, videos_path, name, prompt_list=[], dimension_list=None, local=False, read_frame=False, mode='vbench_standard', **kwargs):
-        results_dict = {}
         if dimension_list is None:
             dimension_list = self.build_full_dimension_list()
-        submodules_dict = init_submodules(dimension_list, local=local, read_frame=read_frame)
+        if len(dimension_list) != len(set(dimension_list)):
+            raise ValueError('dimension_list must not contain duplicate dimensions')
         cur_full_info_path = self.build_full_info_json(videos_path, name, dimension_list, prompt_list, mode=mode, **kwargs)
-        
-        for dimension in dimension_list:
+        local_dimension_list = distribute_list_to_rank(dimension_list)
+        pending_dimension_list = [
+            dimension for dimension in local_dimension_list
+            if _load_dimension_result(
+                _dimension_result_path(self.output_path, name, dimension),
+                dimension,
+            ) is None
+        ]
+        for dimension in pending_dimension_list:
             try:
+                os.remove(_dimension_error_path(self.output_path, name, dimension))
+            except FileNotFoundError:
+                pass
+        barrier()
+        
+        for dimension in pending_dimension_list:
+            try:
+                submodules_list = init_submodules(
+                    [dimension], local=local, read_frame=read_frame
+                )[dimension]
                 if dimension=="Multi-View_Consistency":
                     dimension_change = "Multi_View_Consistency"
                 else:
                     dimension_change = dimension
                 dimension_module = importlib.import_module(f'vbench2.{dimension_change.lower()}')
                 evaluate_func = getattr(dimension_module, f'compute_{dimension_change.lower()}')
-            except Exception as e:
-                raise NotImplementedError(f'UnImplemented dimension {dimension}!, {e}')
-            submodules_list = submodules_dict[dimension]
-            print(f'cur_full_info_path: {cur_full_info_path}') # TODO: to delete
-            results = evaluate_func(cur_full_info_path, self.device, submodules_list, **kwargs)
-            results_dict[dimension] = results
+                print(f'Rank {get_rank()} evaluating {dimension} with {cur_full_info_path}')
+                results = evaluate_func(
+                    cur_full_info_path,
+                    self.device,
+                    submodules_list,
+                    local=local,
+                    **kwargs,
+                )
+                dimension_output = _dimension_result_path(
+                    self.output_path, name, dimension
+                )
+                _save_json_atomic({dimension: results}, dimension_output)
+            except Exception as error:
+                _save_json_atomic(
+                    {
+                        'dimension': dimension,
+                        'rank': get_rank(),
+                        'error': f'{type(error).__name__}: {error}',
+                    },
+                    _dimension_error_path(self.output_path, name, dimension),
+                )
+                raise
+
+        poll_timeout = float(
+            os.environ.get('VBENCH2_EVAL_TIMEOUT_SECONDS', 24 * 60 * 60)
+        )
+        poll_started_at = time.monotonic()
+        while True:
+            gathered_results = {}
+            missing_dimensions = []
+            for dimension in dimension_list:
+                result = _load_dimension_result(
+                    _dimension_result_path(self.output_path, name, dimension),
+                    dimension,
+                )
+                if result is None:
+                    error_path = _dimension_error_path(
+                        self.output_path, name, dimension
+                    )
+                    try:
+                        error = load_json(error_path)
+                    except (OSError, ValueError):
+                        error = None
+                    if error is not None:
+                        raise RuntimeError(
+                            f'VBench2 scoring failed for {dimension}: {error}'
+                        )
+                    missing_dimensions.append(dimension)
+                    continue
+                gathered_results[dimension] = result
+            if len(gathered_results) == len(dimension_list):
+                break
+            if time.monotonic() - poll_started_at >= poll_timeout:
+                raise TimeoutError(
+                    'Timed out waiting for VBench2 dimensions: '
+                    f'{missing_dimensions}. Increase '
+                    'VBENCH2_EVAL_TIMEOUT_SECONDS for longer evaluations.'
+                )
+            time.sleep(10)
+
         output_name = os.path.join(self.output_path, name+'_eval_results.json')
-        save_json(results_dict, output_name)
-        print(f'Evaluation results saved to {output_name}')
+        if get_rank() == 0:
+            _save_json_atomic(gathered_results, output_name)
+        print0(f'Evaluation results saved to {output_name}')
+        barrier()
+
+        return {
+            dimension: gathered_results[dimension][0]
+            for dimension in dimension_list
+        }

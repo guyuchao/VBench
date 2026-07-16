@@ -14,9 +14,31 @@ from PIL import Image
 from torch.utils import model_zoo
 import os
 import json
+import io
+import zipfile
 from collections import Counter
 from vbench2.utils import load_dimension_info
 from tqdm import tqdm
+
+
+def load_retina_state_dict(model_path):
+    if zipfile.is_zipfile(model_path):
+        with zipfile.ZipFile(model_path) as archive:
+            checkpoint_names = [
+                name for name in archive.namelist() if name.endswith('.pth')
+            ]
+            if len(checkpoint_names) != 1:
+                raise RuntimeError(
+                    f'Expected one RetinaFace checkpoint in {model_path}, '
+                    f'found {checkpoint_names}'
+                )
+            with archive.open(checkpoint_names[0]) as checkpoint:
+                return torch.load(
+                    io.BytesIO(checkpoint.read()),
+                    map_location='cpu',
+                    weights_only=False,
+                )
+    return torch.load(model_path, map_location='cpu', weights_only=False)
 
 def most_frequent_number(numbers):
     count = Counter(numbers)
@@ -141,8 +163,16 @@ def evaluate_id_consistency(prompt_dict_ls, retina_model, model):
 def compute_human_identity(json_dir, device, submodules_dict, **kwargs):
     _, prompt_dict_ls = load_dimension_info(json_dir, dimension='human_identity', lang='en')
     
-    url="https://github.com/ternaus/retinaface/releases/download/0.01/retinaface_resnet50_2020-07-20-f168fae3c.zip"
-    retina_state_dict = model_zoo.load_url(url, progress=True, map_location="cpu")
+    retina_path = submodules_dict.get('retina')
+    if retina_path is None:
+        retina_state_dict = model_zoo.load_url(
+            'https://github.com/ternaus/retinaface/releases/download/0.01/'
+            'retinaface_resnet50_2020-07-20-f168fae3c.zip',
+            progress=True,
+            map_location='cpu',
+        )
+    else:
+        retina_state_dict = load_retina_state_dict(retina_path)
     retina_model = Model(max_size=2048, device=device)
     retina_model.load_state_dict(retina_state_dict)
     model = resnet_face18(use_se=False)

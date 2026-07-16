@@ -2,8 +2,25 @@ import os
 from typing import Literal
 import cv2
 import json
-from .split import split
+from .split import split_video
 from tqdm import tqdm
+
+import qwen_vl_utils.vision_process as vision_process
+
+
+_factor = 28
+_model_seq_len = getattr(vision_process, 'MODEL_SEQ_LEN', 128000)
+_qwen_vl_defaults = {
+    'IMAGE_FACTOR': _factor,
+    'MIN_PIXELS': vision_process.IMAGE_MIN_TOKEN_NUM * _factor**2,
+    'MAX_PIXELS': vision_process.IMAGE_MAX_TOKEN_NUM * _factor**2,
+    'VIDEO_MIN_PIXELS': vision_process.VIDEO_MIN_TOKEN_NUM * _factor**2,
+    'VIDEO_MAX_PIXELS': vision_process.VIDEO_MAX_TOKEN_NUM * _factor**2,
+    'VIDEO_TOTAL_PIXELS': int(_model_seq_len * _factor**2 * 0.9),
+}
+for _name, _value in _qwen_vl_defaults.items():
+    if not hasattr(vision_process, _name):
+        setattr(vision_process, _name, _value)
 
 def infer_lora(engine, request_config, infer_request: 'InferRequest'):
     resp_list = engine.infer([infer_request], request_config)
@@ -34,6 +51,9 @@ def compute_anomaly(prompt_dict_ls, device, submodules_dict):
     request_config = RequestConfig(max_tokens=512, temperature=0)
     adapter_path = submodules_dict['model']
     args = BaseArguments.from_pretrained(adapter_path)
+    if submodules_dict.get('base_model'):
+        args.model = submodules_dict['base_model']
+    args.attn_impl = None
     model, tokenizer = get_model_tokenizer(args.model)
     model = Swift.from_pretrained(model, adapter_path)
     template = get_template(args.template, tokenizer, args.system)
@@ -43,8 +63,6 @@ def compute_anomaly(prompt_dict_ls, device, submodules_dict):
     processed_json=[]
     for prompt_dict in tqdm(prompt_dict_ls):
         video_paths = prompt_dict['video_list']
-        model_name = video_paths[0].split('/')[-3]
-        split(os.path.dirname(video_paths[0]), model_name)
         for video_path in video_paths:
             frame_count, fps, video_length = get_video_info(video_path)
             os.environ['FPS'] = f'{fps}'
@@ -52,7 +70,12 @@ def compute_anomaly(prompt_dict_ls, device, submodules_dict):
             new_item={
                 'video_path':video_path,
             }
-            video_clip_paths = f"./model_clip/{model_name}"
+            iteration_dir = os.path.dirname(os.path.dirname(video_path))
+            video_clip_paths = os.path.join(
+                iteration_dir, 'vbench2_info', 'instance_clips'
+            )
+            os.makedirs(video_clip_paths, exist_ok=True)
+            split_video(video_path, video_clip_paths)
             for idx in range(int(video_length)-1):
                 clip_path = os.path.join(video_clip_paths, f"{video_path.split('/')[-1][:-4]}_clip_{idx:04d}.mp4")
                 message = [
@@ -77,9 +100,10 @@ def compute_anomaly(prompt_dict_ls, device, submodules_dict):
                 infer_request = InferRequest(messages=message)
                 try:
                     output_text = infer_lora(engine, request_config, infer_request)
-                except:
-                    output_text = 'no'
-                    print(f"Error processing video: {clip_path}")
+                except Exception as error:
+                    raise RuntimeError(
+                        f'Error processing video: {clip_path}'
+                    ) from error
                 if '(A)' in output_text or 'yes' in output_text.lower() or 'A'==output_text:
                     valid=False
                     break

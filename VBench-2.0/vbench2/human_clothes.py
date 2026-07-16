@@ -1,8 +1,8 @@
 # pip install git+https://github.com/LLaVA-VL/LLaVA-NeXT.git
-from vbench2.third_party.LLaVA_NeXT.llava.model.builder import load_pretrained_model
-from vbench2.third_party.LLaVA_NeXT.llava.mm_utils import get_model_name_from_path, process_images, tokenizer_image_token
-from vbench2.third_party.LLaVA_NeXT.llava.constants import IMAGE_TOKEN_INDEX, DEFAULT_IMAGE_TOKEN, DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN, IGNORE_INDEX
-from vbench2.third_party.LLaVA_NeXT.llava.conversation import conv_templates, SeparatorStyle
+from llava.model.builder import load_pretrained_model
+from llava.mm_utils import get_model_name_from_path, process_images, tokenizer_image_token
+from llava.constants import IMAGE_TOKEN_INDEX, DEFAULT_IMAGE_TOKEN, DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN, IGNORE_INDEX
+from llava.conversation import conv_templates, SeparatorStyle
 from PIL import Image
 import requests
 import copy
@@ -101,13 +101,9 @@ def LLaVA_Video(prompt_dict_ls, model, tokenizer, image_processor, device):
 def compute_human_clothes(json_dir, device, submodules_dict, **kwargs):
     _, prompt_dict_ls = load_dimension_info(json_dir, dimension='human_clothes', lang='en')
     model_name = "llava_qwen"
-    device_map = "auto"
-    try:
-        pretrained = submodules_dict['llava']
-        llava_tokenizer, llava_model, image_processor, max_length = load_pretrained_model(pretrained, None, model_name, torch_dtype="bfloat16", device_map=device_map)  # Add any other thing you want to pass in llava_model_args
-    except:
-        pretrained = "lmms-lab/LLaVA-Video-7B-Qwen2"
-        llava_tokenizer, llava_model, image_processor, max_length = load_pretrained_model(pretrained, None, model_name, torch_dtype="bfloat16", device_map=device_map)  # Add any other thing you want to pass in llava_model_args
+    device_map = {"": device}
+    pretrained = submodules_dict['llava']
+    llava_tokenizer, llava_model, image_processor, max_length = load_pretrained_model(pretrained, None, model_name, torch_dtype="bfloat16", device_map=device_map, attn_implementation=None)  # Add any other thing you want to pass in llava_model_args
     llava_model.eval()
     
     all_results, video_results = LLaVA_Video(prompt_dict_ls, llava_model, llava_tokenizer, image_processor, device)
