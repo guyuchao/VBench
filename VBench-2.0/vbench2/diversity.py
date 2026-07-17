@@ -41,9 +41,7 @@ def content_loss(content, target_content):
     return torch.mean(torch.abs(content - target_content))
 
 def style_loss(style, target_style):
-    gram_style = gram_matrix(style)
-    gram_target_style = gram_matrix(target_style)
-    return torch.mean(torch.abs(gram_style - gram_target_style))
+    return torch.mean(torch.abs(style - target_style))
 
 def evaluate(style_features, content_features):
     content_diversity = 0
@@ -72,11 +70,11 @@ def Diversity(prompt_dict_ls, model, device):
             frames=frames.to(device)
             with torch.no_grad():
                 features = model(frames)
-            style=features[:5] 
+            style=[gram_matrix(feature) for feature in features[:5]]
             content=features[5]
             style_features.append(style)
             content_features.append(content)
-            del style, content, frames
+            del style, content, features, frames
             torch.cuda.empty_cache()
 
         content_diversity, style_diversity, diversity=evaluate(style_features, content_features)
