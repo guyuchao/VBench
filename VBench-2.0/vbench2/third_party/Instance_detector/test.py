@@ -2,6 +2,8 @@ import os
 from typing import Literal
 import cv2
 import json
+import torch
+import torch.nn.functional as F
 from .split import split_video
 from tqdm import tqdm
 
@@ -40,6 +42,68 @@ def get_video_info(video_path):
 from swift.llm import (PtEngine, RequestConfig, AdapterRequest, get_template, BaseArguments, InferRequest,
                         safe_snapshot_download, get_model_tokenizer)
 from swift.tuners import Swift
+
+
+def _patch_qwen2_5_vl_sdpa():
+    """Avoid the quadratic dense vision mask used by older Transformers."""
+    try:
+        from transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import (
+            Qwen2_5_VLVisionSdpaAttention,
+            apply_rotary_pos_emb_vision,
+        )
+    except ImportError:
+        # Transformers >= 4.54 already processes each cu_seqlens chunk
+        # independently and no longer exposes this legacy attention class.
+        return
+
+    if getattr(Qwen2_5_VLVisionSdpaAttention.forward, '_vbench2_chunked_sdpa', False):
+        return
+
+    def chunked_forward(
+        self,
+        hidden_states,
+        cu_seqlens,
+        rotary_pos_emb=None,
+        position_embeddings=None,
+    ):
+        seq_length = hidden_states.shape[0]
+        q, k, v = (
+            self.qkv(hidden_states)
+            .reshape(seq_length, 3, self.num_heads, -1)
+            .permute(1, 0, 2, 3)
+            .unbind(0)
+        )
+        if position_embeddings is None:
+            emb = torch.cat((rotary_pos_emb, rotary_pos_emb), dim=-1)
+            cos, sin = emb.cos(), emb.sin()
+        else:
+            cos, sin = position_embeddings
+        q, k = apply_rotary_pos_emb_vision(q, k, cos, sin)
+
+        q, k, v = (tensor.transpose(0, 1) for tensor in (q, k, v))
+        lengths = (cu_seqlens[1:] - cu_seqlens[:-1]).tolist()
+        chunks = [torch.split(tensor, lengths, dim=1) for tensor in (q, k, v)]
+        attn_output = torch.cat(
+            [
+                F.scaled_dot_product_attention(
+                    q_chunk.unsqueeze(0),
+                    k_chunk.unsqueeze(0),
+                    v_chunk.unsqueeze(0),
+                    dropout_p=0.0,
+                ).squeeze(0)
+                for q_chunk, k_chunk, v_chunk in zip(*chunks)
+            ],
+            dim=1,
+        )
+        attn_output = attn_output.transpose(0, 1).reshape(seq_length, -1)
+        return self.proj(attn_output)
+
+    chunked_forward._vbench2_chunked_sdpa = True
+    Qwen2_5_VLVisionSdpaAttention.forward = chunked_forward
+
+
+_patch_qwen2_5_vl_sdpa()
+
 os.environ['MAX_PIXELS'] = '1003520'
 os.environ['VIDEO_MAX_PIXELS'] = '602112'
 os.environ['VIDEO_MIN_PIXELS'] = '100352'
