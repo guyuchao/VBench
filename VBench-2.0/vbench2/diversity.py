@@ -88,9 +88,18 @@ def Diversity(prompt_dict_ls, model, device):
     return final_score/len(prompt_dict_ls), processed_json
 
 def compute_diversity(json_dir, device, submodules_dict, **kwargs):
-    _, prompt_dict_ls = load_dimension_info(json_dir, dimension='diversity', lang='en')
-    model = VGG(submodules_dict.get('model')).to(device)
-    
-    all_results, video_results = Diversity(prompt_dict_ls, model, device)
-    all_results = sum([d['video_results'] for d in video_results]) / len(video_results)
-    return all_results, video_results
+    previous_num_threads = torch.get_num_threads()
+    diversity_num_threads = min(32, os.cpu_count() or 1)
+    increase_num_threads = diversity_num_threads > previous_num_threads
+    if increase_num_threads:
+        torch.set_num_threads(diversity_num_threads)
+    try:
+        _, prompt_dict_ls = load_dimension_info(json_dir, dimension='diversity', lang='en')
+        model = VGG(submodules_dict.get('model')).to(device)
+
+        all_results, video_results = Diversity(prompt_dict_ls, model, device)
+        all_results = sum([d['video_results'] for d in video_results]) / len(video_results)
+        return all_results, video_results
+    finally:
+        if increase_num_threads:
+            torch.set_num_threads(previous_num_threads)
