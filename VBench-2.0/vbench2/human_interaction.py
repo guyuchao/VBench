@@ -182,34 +182,19 @@ def compute_human_interaction(json_dir, device, submodules_dict, **kwargs):
     _, prompt_dict_ls = load_dimension_info(json_dir, dimension='human_interaction', lang='en')
     
     model_name = "llava_qwen"
-    device_map = "auto"
+    device_map = {"": device}
     
-    try:
-        pretrained = submodules_dict['llava']
-        llava_tokenizer, llava_model, image_processor, max_length = load_pretrained_model(pretrained, None, model_name, torch_dtype="bfloat16", device_map=device_map)  # Add any other thing you want to pass in llava_model_args
-    except:
-        pretrained = "lmms-lab/LLaVA-Video-7B-Qwen2"
-        llava_tokenizer, llava_model, image_processor, max_length = load_pretrained_model(pretrained, None, model_name, torch_dtype="bfloat16", device_map=device_map)  # Add any other thing you want to pass in llava_model_args
+    pretrained = submodules_dict['llava']
+    llava_tokenizer, llava_model, image_processor, max_length = load_pretrained_model(pretrained, None, model_name, torch_dtype="bfloat16", device_map=device_map, attn_implementation=None)  # Add any other thing you want to pass in llava_model_args
     llava_model.eval()
-    
-    try:
-        qwen_model_name = submodules_dict['qwen']
-        qwen_model = AutoModelForCausalLM.from_pretrained(
-            qwen_model_name,
-            torch_dtype="auto",
-            device_map="auto",
-            cache_dir=submodules_dict['qwen']
-        )
-        qwen_tokenizer = AutoTokenizer.from_pretrained(qwen_model_name, cache_dir=submodules_dict['qwen'])
-    except:
-        qwen_model_name = 'Qwen/Qwen2.5-7B-Instruct'
-        qwen_model = AutoModelForCausalLM.from_pretrained(
-            qwen_model_name,
-            torch_dtype="auto",
-            device_map="auto",
-            cache_dir=submodules_dict['qwen']
-        )
-        qwen_tokenizer = AutoTokenizer.from_pretrained(qwen_model_name, cache_dir=submodules_dict['qwen'])
+
+    qwen_model_name = submodules_dict['qwen']
+    qwen_model = AutoModelForCausalLM.from_pretrained(
+        qwen_model_name,
+        torch_dtype="auto",
+        device_map=device_map,
+    )
+    qwen_tokenizer = AutoTokenizer.from_pretrained(qwen_model_name)
         
     all_results, video_results = LLaVA_Video(prompt_dict_ls, llava_model, llava_tokenizer, image_processor, qwen_model, qwen_tokenizer, device)
     all_results = sum([d['video_results'] for d in video_results]) / len(video_results)

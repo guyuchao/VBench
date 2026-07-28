@@ -13,9 +13,14 @@ from tqdm import tqdm
 
 
 class VGG(nn.Module):
-    def __init__(self):
+    def __init__(self, model_path=None):
         super(VGG, self).__init__()
-        self.features = vgg19(pretrained=True).features.eval()
+        model = vgg19(weights=None)
+        if model_path is None:
+            model = vgg19(pretrained=True)
+        else:
+            model.load_state_dict(torch.load(model_path, map_location='cpu'))
+        self.features = model.features.eval()
 
     def forward(self, x):
         features = []
@@ -36,9 +41,7 @@ def content_loss(content, target_content):
     return torch.mean(torch.abs(content - target_content))
 
 def style_loss(style, target_style):
-    gram_style = gram_matrix(style)
-    gram_target_style = gram_matrix(target_style)
-    return torch.mean(torch.abs(gram_style - gram_target_style))
+    return torch.mean(torch.abs(style - target_style))
 
 def evaluate(style_features, content_features):
     content_diversity = 0
@@ -67,11 +70,11 @@ def Diversity(prompt_dict_ls, model, device):
             frames=frames.to(device)
             with torch.no_grad():
                 features = model(frames)
-            style=features[:5] 
+            style=[gram_matrix(feature) for feature in features[:5]]
             content=features[5]
             style_features.append(style)
             content_features.append(content)
-            del style, content, frames
+            del style, content, features, frames
             torch.cuda.empty_cache()
 
         content_diversity, style_diversity, diversity=evaluate(style_features, content_features)
@@ -85,9 +88,18 @@ def Diversity(prompt_dict_ls, model, device):
     return final_score/len(prompt_dict_ls), processed_json
 
 def compute_diversity(json_dir, device, submodules_dict, **kwargs):
-    _, prompt_dict_ls = load_dimension_info(json_dir, dimension='diversity', lang='en')
-    model = VGG().to(device)
-    
-    all_results, video_results = Diversity(prompt_dict_ls, model, device)
-    all_results = sum([d['video_results'] for d in video_results]) / len(video_results)
-    return all_results, video_results
+    previous_num_threads = torch.get_num_threads()
+    diversity_num_threads = min(32, os.cpu_count() or 1)
+    increase_num_threads = diversity_num_threads > previous_num_threads
+    if increase_num_threads:
+        torch.set_num_threads(diversity_num_threads)
+    try:
+        _, prompt_dict_ls = load_dimension_info(json_dir, dimension='diversity', lang='en')
+        model = VGG(submodules_dict.get('model')).to(device)
+
+        all_results, video_results = Diversity(prompt_dict_ls, model, device)
+        all_results = sum([d['video_results'] for d in video_results]) / len(video_results)
+        return all_results, video_results
+    finally:
+        if increase_num_threads:
+            torch.set_num_threads(previous_num_threads)

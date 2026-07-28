@@ -15,23 +15,19 @@ from mmengine.dataset import Compose
 from mmdet.apis import init_detector
 from mmyolo.registry import VISUALIZERS
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from vbench2.third_party.ViTDetector.logger import create_logger
 from vbench2.third_party.ViTDetector.config import get_config
 from vbench2.third_party.ViTDetector.models import build_model
-from torch.nn.parallel import DataParallel
 import math
 from torchvision import datasets, transforms
-from timm.data.transforms import _pil_interp
+from torchvision.transforms import InterpolationMode
 from collections import defaultdict
 from typing import List, Dict
  
 
-logger = create_logger(output_dir='./', dist_rank=0, name="abnormality_detection")
-
 class Detector:
     def __init__(self, config_file, weight_file, device='cuda'):
-        self.model_human = init_detector(config_file, weight_file, device='cuda')
-        self.model_face_hand = init_detector(config_file, weight_file, device='cuda')
+        self.model_human = init_detector(config_file, weight_file, device=device)
+        self.model_face_hand = init_detector(config_file, weight_file, device=device)
 
         # change data loader
         self.model_human.cfg.test_dataloader.dataset.pipeline[0].type = 'mmdet.LoadImageFromNDArray'
@@ -144,7 +140,7 @@ class Analyzer:
     def _initialize_models(self, model_configs):
         for category, config in model_configs.items():
             model, model_config = self._build_model(config["cfg_path"], config["weight_path"])
-            self.models[category] = DataParallel(model).to(self.device).eval()
+            self.models[category] = model.to(self.device).eval()
             self.transforms[category] = self._build_transform(model_config)
 
     def _build_model(self, cfg_path, weight_path):
@@ -165,14 +161,16 @@ class Analyzer:
         if config.TEST.CROP:
             size = int((256 / 224) * config.DATA.IMG_SIZE)
             t.append(
-                transforms.Resize(size, interpolation=_pil_interp(config.DATA.INTERPOLATION)),
+                transforms.Resize(
+                    size, interpolation=InterpolationMode(config.DATA.INTERPOLATION)
+                ),
                 # to maintain same ratio w.r.t. 224 images
             )
             t.append(transforms.CenterCrop(config.DATA.IMG_SIZE))
         else:
             t.append(
                 transforms.Resize((config.DATA.IMG_SIZE, config.DATA.IMG_SIZE),
-                                    interpolation=_pil_interp(config.DATA.INTERPOLATION))
+                                    interpolation=InterpolationMode(config.DATA.INTERPOLATION))
             )
 
         t.append(transforms.ToTensor())
