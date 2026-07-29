@@ -47,6 +47,14 @@ logging.basicConfig(level = logging.INFO,format = '%(asctime)s - %(name)s - %(le
 logger = logging.getLogger(__name__)
 
 
+def decord_batch_to_numpy(batch):
+    if hasattr(batch, 'asnumpy'):
+        return batch.asnumpy()
+    if hasattr(batch, 'cpu'):
+        return batch.cpu().numpy()
+    return np.asarray(batch)
+
+
 def split_video_into_scenes(video_path, threshold=27.0):
     # Open our video, create a scene manager, and add a detector.
     video_name = os.path.splitext(os.path.basename(video_path))[0]
@@ -127,7 +135,7 @@ def load_video(video_path, data_transform=None, num_frames=None, return_tensor=T
             num_frames, len(video_reader), sample="middle"
             )
         frames = video_reader.get_batch(frame_indices)  # (T, H, W, C), torch.uint8
-        buffer = frames.asnumpy().astype(np.uint8)
+        buffer = decord_batch_to_numpy(frames).astype(np.uint8)
     else:
         raise NotImplementedError
     
