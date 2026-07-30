@@ -1,5 +1,9 @@
-include version.txt 
+include version.txt
 include requirement.txt
-recursive-include vbench2/third_party *.yaml
+recursive-include vbench2 *.py
 recursive-include vbench2 *.json
 recursive-include vbench2 *.txt
+recursive-include vbench2 *.yaml
+recursive-include vbench2 *.yml
+recursive-include vbench2 *.md
+global-exclude __pycache__ *.py[cod]
