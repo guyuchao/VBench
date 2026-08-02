@@ -73,6 +73,7 @@ class VBenchMultishot:
         manifest: str | Path | None = None,
         metrics: list[str] | None = None,
         save_json: bool = True,
+        return_raw_results: bool = False,
     ) -> dict[str, Any]:
         multishot_tools = Path(__file__).resolve().parents[1] / "tools" / "multishot_eval"
         if str(multishot_tools) not in sys.path:
@@ -128,13 +129,51 @@ class VBenchMultishot:
         else:
             gathered_items = local_items
         results = {item["video_id"]: item["result"] for item in gathered_items}
+        summary = summarize_results(results)
 
         if save_json and rank == 0:
             output_path = self.output_dir / "multishot_eval_results.json"
             with output_path.open("w", encoding="utf-8") as f:
                 json.dump(results, f, indent=2, ensure_ascii=False)
                 f.write("\n")
+            summary_path = self.output_dir / "multishot_eval_summary.json"
+            with summary_path.open("w", encoding="utf-8") as f:
+                json.dump(summary, f, indent=2, ensure_ascii=False)
+                f.write("\n")
         barrier()
-        return results
+        return results if return_raw_results else summary
 
 
+def summarize_results(raw_results: dict[str, Any]) -> dict[str, Any]:
+    summary = {"num_videos": len(raw_results)}
+    collected: dict[str, list[float]] = {}
+
+    def collect(metric_name: str, data: Any, path: list[str]) -> None:
+        value = data
+        for key in path:
+            if not isinstance(value, dict) or key not in value:
+                return
+            value = value[key]
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            collected.setdefault(metric_name, []).append(float(value))
+
+    for video_result in raw_results.values():
+        collect("overall_quality_text_alignment", video_result, ["overall_quality", "text_alignment", "average"])
+        collect("inter_shot_quality", video_result, ["inter_shot_quality", "average"])
+        for key in ["sca", "nsd", "boundary_match_rate", "cut_precision", "cut_recall", "cut_count_accuracy"]:
+            collect(f"shot_structure_{key}", video_result, ["shot_structure", key])
+
+        for section in ["overall_quality", "intra_shot_quality"]:
+            section_result = video_result.get(section)
+            if not isinstance(section_result, dict):
+                continue
+            for dimension, dimension_result in section_result.items():
+                if dimension == "text_alignment":
+                    continue
+                if isinstance(dimension_result, dict):
+                    collect(f"{section}_{dimension}", video_result, [section, dimension, "average"])
+
+    for key, values in collected.items():
+        if values:
+            summary[key] = sum(values) / len(values)
+    return summary
